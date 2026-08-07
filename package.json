@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "vendor:quran": "node scripts/vendor-quran-data.mjs"
+    "vendor:quran": "node scripts/vendor-quran-data.mjs",
+    "vendor:translations": "node scripts/vendor-translations.mjs"
   },
   "dependencies": {
     "next": "^16.3.0",

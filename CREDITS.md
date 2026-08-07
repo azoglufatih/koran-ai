@@ -26,6 +26,21 @@ The Arabic text in `src/content/data/` is the Uthmani text from the
 
 The text is vendored verbatim. Regenerate it with `npm run vendor:quran`.
 
+## Translations
+
+The translations in `public/content/translations/` are vendored from
+[fawazahmed0/quran-api](https://github.com/fawazahmed0/quran-api), which releases its compilation
+into the public domain (Unlicense). Each translation is credited to its translator:
+
+| Language | Translator | Upstream edition |
+| --- | --- | --- |
+| English | Marmaduke Pickthall | `eng-mohammedmarmadu` |
+| Türkçe | Diyanet İşleri | `tur-diyanetisleri` |
+| Deutsch | Abu Rida Muhammad ibn Ahmad ibn Rassoul | `deu-aburidamuhammad` |
+
+Each translator is credited in the UI, at the foot of their Translation Tab. Regenerate the
+vendored text with `npm run vendor:translations`.
+
 ## Surah metadata
 
 Surah names, Ayah counts, and revelation places come from the

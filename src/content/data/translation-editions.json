@@ -1,0 +1,17 @@
+[
+  {
+    "language": "en",
+    "label": "English",
+    "translator": "Marmaduke Pickthall"
+  },
+  {
+    "language": "tr",
+    "label": "Türkçe",
+    "translator": "Diyanet İşleri"
+  },
+  {
+    "language": "de",
+    "label": "Deutsch",
+    "translator": "Abu Rida Muhammad ibn Ahmad ibn Rassoul"
+  }
+]

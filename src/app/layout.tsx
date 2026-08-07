@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { TabsProvider } from "@/components/tabs/tabs-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-scroll-behavior="smooth">
       <body className="flex min-h-dvh flex-col antialiased">
         <header className="bg-parchment/85 dark:bg-night/85 sticky top-0 z-10 border-b border-black/10 backdrop-blur dark:border-white/10">
           <nav className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
@@ -28,7 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </header>
 
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{children}</main>
+        {/* Tabs live above the routes so a reader's open Tabs survive moving between Surahs. */}
+        <TabsProvider>
+          <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{children}</main>
+        </TabsProvider>
 
         <footer className="mt-12 border-t border-black/10 dark:border-white/10">
           <div className="mx-auto max-w-3xl space-y-1 px-4 py-6 text-xs leading-relaxed text-black/55 dark:text-white/55">

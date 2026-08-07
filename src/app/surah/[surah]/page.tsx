@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { quranContent } from "@/content/bundled-quran";
 import { ReadingPane } from "@/components/reading-pane";
 import { AyahJump } from "@/components/ayah-jump";
+import { TabWorkspace } from "@/components/tabs/tab-workspace";
 
 type PageProps = { params: Promise<{ surah: string }> };
 
@@ -43,6 +44,8 @@ export default async function SurahPage({ params }: PageProps) {
       <AyahJump ayahCount={summary.ayahCount} />
 
       <ReadingPane surah={surah} />
+
+      <TabWorkspace surahNumber={summary.number} />
 
       <nav className="mt-10 flex items-center justify-between gap-3 border-t border-black/10 pt-6 text-sm dark:border-white/10">
         {previous ? (

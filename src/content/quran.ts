@@ -28,3 +28,25 @@ export interface Surah {
   summary: SurahSummary;
   ayahs: Ayah[];
 }
+
+/** The languages a Translation Tab can be opened in. */
+export const TRANSLATION_LANGUAGES = ["en", "tr", "de"] as const;
+
+export type TranslationLanguage = (typeof TRANSLATION_LANGUAGES)[number];
+
+export interface TranslationEdition {
+  language: TranslationLanguage;
+  /** The language's endonym, so a reader recognises their own language in the Tab strip. */
+  label: string;
+  translator: string;
+}
+
+export interface TranslatedAyah {
+  ref: AyahRef;
+  text: string;
+}
+
+export interface SurahTranslation {
+  edition: TranslationEdition;
+  ayahs: TranslatedAyah[];
+}

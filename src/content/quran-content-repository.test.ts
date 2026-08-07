@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createQuranContentRepository } from "./quran-content-repository";
-import type { SurahSummary } from "./quran";
+import type { SurahSummary, TranslationEdition, TranslationLanguage } from "./quran";
 
 const AL_FAATIHA: SurahSummary = {
   number: 1,
@@ -27,10 +27,52 @@ const FIXTURE_TEXT: Record<number, string[]> = {
   2: ["الٓمٓ", "ذَٰلِكَ ٱلْكِتَٰبُ"],
 };
 
+const ENGLISH: TranslationEdition = {
+  language: "en",
+  label: "English",
+  translator: "Marmaduke Pickthall",
+};
+
+const TURKISH: TranslationEdition = {
+  language: "tr",
+  label: "Türkçe",
+  translator: "Diyanet İşleri",
+};
+
+const GERMAN: TranslationEdition = {
+  language: "de",
+  label: "Deutsch",
+  translator: "Abu Rida Muhammad ibn Ahmad ibn Rassoul",
+};
+
+const FIXTURE_TRANSLATIONS: Record<string, Record<number, string[]>> = {
+  en: {
+    1: ["In the name of Allah", "Praise be to Allah", "The Beneficent, the Merciful"],
+    2: ["Alif. Lam. Mim.", "This is the Scripture"],
+  },
+  tr: {
+    1: ["Allah'ın adıyla", "Hamd Allah'a mahsustur", "O, Rahman'dır, Rahim'dir"],
+    2: ["Elif Lam Mim", "İşte Kitap"],
+  },
+  de: {
+    1: ["Im Namen Allahs", "Alles Lob gebührt Allah", "Dem Allerbarmer, dem Barmherzigen"],
+    2: ["Alif Lam Mim", "Dies ist das Buch"],
+  },
+};
+
 function createRepository() {
   const loadSurahText = vi.fn(async (surahNumber: number) => FIXTURE_TEXT[surahNumber]);
-  const repository = createQuranContentRepository([AL_FAATIHA, AL_BAQARA], loadSurahText);
-  return { repository, loadSurahText };
+  const loadTranslationText = vi.fn(
+    async (surahNumber: number, language: TranslationLanguage) =>
+      FIXTURE_TRANSLATIONS[language][surahNumber],
+  );
+  const repository = createQuranContentRepository({
+    surahIndex: [AL_FAATIHA, AL_BAQARA],
+    translationEditions: [ENGLISH, TURKISH, GERMAN],
+    loadSurahText,
+    loadTranslationText,
+  });
+  return { repository, loadSurahText, loadTranslationText };
 }
 
 describe("listSurahs", () => {
@@ -106,5 +148,69 @@ describe("getAyah", () => {
     const { repository } = createRepository();
 
     await expect(repository.getAyah({ surah: 0, ayah: 1 })).rejects.toThrow("Surah 0");
+  });
+});
+
+describe("getTranslation", () => {
+  it("returns the edition alongside every Ayah's translated text, in order", async () => {
+    const { repository } = createRepository();
+
+    const translation = await repository.getTranslation(1, "en");
+
+    expect(translation.edition).toEqual(ENGLISH);
+    expect(translation.ayahs).toEqual([
+      { ref: { surah: 1, ayah: 1 }, text: "In the name of Allah" },
+      { ref: { surah: 1, ayah: 2 }, text: "Praise be to Allah" },
+      { ref: { surah: 1, ayah: 3 }, text: "The Beneficent, the Merciful" },
+    ]);
+  });
+
+  it("rejects a translation that does not align Ayah-for-Ayah with the Arabic", async () => {
+    const { repository, loadTranslationText } = createRepository();
+    loadTranslationText.mockResolvedValueOnce(["Alif. Lam. Mim."]);
+
+    await expect(repository.getTranslation(2, "en")).rejects.toThrow(
+      "Surah 2: expected 2 translated Ayahs, got 1",
+    );
+  });
+
+  it("rejects a Surah outside the corpus without loading any translation", async () => {
+    const { repository, loadTranslationText } = createRepository();
+
+    await expect(repository.getTranslation(115, "en")).rejects.toThrow("Surah 115");
+    expect(loadTranslationText).not.toHaveBeenCalled();
+  });
+
+  it("serves each of the launch languages from its own edition", async () => {
+    const { repository } = createRepository();
+
+    const [english, turkish, german] = await Promise.all([
+      repository.getTranslation(2, "en"),
+      repository.getTranslation(2, "tr"),
+      repository.getTranslation(2, "de"),
+    ]);
+
+    expect(english.edition).toEqual(ENGLISH);
+    expect(english.ayahs[1].text).toBe("This is the Scripture");
+    expect(turkish.edition).toEqual(TURKISH);
+    expect(turkish.ayahs[1].text).toBe("İşte Kitap");
+    expect(german.edition).toEqual(GERMAN);
+    expect(german.ayahs[1].text).toBe("Dies ist das Buch");
+  });
+
+  it("rejects a language no edition covers", async () => {
+    const { repository } = createRepository();
+
+    await expect(
+      repository.getTranslation(1, "fr" as TranslationLanguage),
+    ).rejects.toThrow('language "fr"');
+  });
+});
+
+describe("listTranslationEditions", () => {
+  it("returns every edition a Translation Tab can be opened in", () => {
+    const { repository } = createRepository();
+
+    expect(repository.listTranslationEditions()).toEqual([ENGLISH, TURKISH, GERMAN]);
   });
 });
