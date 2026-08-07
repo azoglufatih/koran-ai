@@ -4,6 +4,7 @@ import { TAFSIR_SOURCES, type TranslationLanguage } from "@/content/quran";
 import { languageLabel, readerLanguages } from "./reader-languages";
 import { tafsirLanguages } from "./tafsir-editions";
 import { tafsirTabId, translationTabId, useTabs, type Tab } from "./tabs-provider";
+import { AiTabContent } from "./ai-tab-content";
 import { TafsirTabContent } from "./tafsir-tab-content";
 import { TranslationTabContent } from "./translation-tab-content";
 
@@ -13,9 +14,14 @@ const [TAFSIR_SOURCE] = TAFSIR_SOURCES;
 const languagesWithTafsir = new Set(tafsirLanguages(TAFSIR_SOURCE));
 
 function tabLabel(tab: Tab): string {
-  return tab.kind === "translation"
-    ? languageLabel(tab.language)
-    : `Tafsir · ${languageLabel(tab.language)}`;
+  switch (tab.kind) {
+    case "translation":
+      return languageLabel(tab.language);
+    case "tafsir":
+      return `Tafsir · ${languageLabel(tab.language)}`;
+    case "ai":
+      return `AI ${tab.conversation}`;
+  }
 }
 
 /**
@@ -71,6 +77,7 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
 
         <OpenTranslationTab />
         <OpenTafsirTab />
+        <OpenAiTab />
       </div>
 
       {tabs.length === 0 ? (
@@ -110,6 +117,8 @@ function TabContent({ tab, surahNumber }: { tab: Tab; surahNumber: number }) {
       return (
         <TafsirTabContent surahNumber={surahNumber} source={tab.source} language={tab.language} />
       );
+    case "ai":
+      return <AiTabContent />;
   }
 }
 
@@ -168,6 +177,21 @@ function OpenTafsirTab() {
         />
       ))}
     </AddTabMenu>
+  );
+}
+
+// No menu to choose from: every AI Tab is a new conversation, so the button is the whole choice.
+function OpenAiTab() {
+  const { openAiTab } = useTabs();
+
+  return (
+    <button
+      type="button"
+      onClick={openAiTab}
+      className="shrink-0 rounded-lg border border-black/15 px-3 py-1.5 text-sm text-black/65 hover:text-black dark:border-white/15 dark:text-white/65 dark:hover:text-white"
+    >
+      + AI
+    </button>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, use, useState } from "react";
+import { RetryNotice } from "./retry-notice";
 
 type LoadResult<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -67,18 +68,12 @@ function LoadedOrRetry<T>({
   if (loaded.ok) return children(loaded.value);
 
   return (
-    <div className="px-1 py-6 text-sm">
-      <p className="text-red-700 dark:text-red-400">{loaded.message}</p>
-      <button
-        type="button"
-        onClick={() => {
-          loads.delete(cacheKey);
-          setAttempt(attempt + 1);
-        }}
-        className="mt-2 rounded-lg border border-black/15 px-3 py-1.5 hover:bg-black/[0.06] dark:border-white/15 dark:hover:bg-white/[0.08]"
-      >
-        Try again
-      </button>
-    </div>
+    <RetryNotice
+      message={loaded.message}
+      onRetry={() => {
+        loads.delete(cacheKey);
+        setAttempt(attempt + 1);
+      }}
+    />
   );
 }

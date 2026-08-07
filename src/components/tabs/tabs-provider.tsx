@@ -12,7 +12,7 @@ import { detectTranslationLanguage } from "@/content/translation-language";
 import type { TafsirSource, TranslationLanguage } from "@/content/quran";
 
 /**
- * A Tab the reader has opened alongside the Reading Pane. The AI Tab joins this union as it lands.
+ * A Tab the reader has opened alongside the Reading Pane.
  */
 export interface TranslationTab {
   id: string;
@@ -27,7 +27,18 @@ export interface TafsirTab {
   language: TranslationLanguage;
 }
 
-export type Tab = TranslationTab | TafsirTab;
+/**
+ * Unlike the other Tabs, an AI Tab is not identified by what it shows — it is a conversation, and a
+ * reader asking about a second Ayah wants a second one rather than the one they already have.
+ * `conversation` numbers them so two AI Tabs are tellable apart in the Tab strip.
+ */
+export interface AiTab {
+  id: string;
+  kind: "ai";
+  conversation: number;
+}
+
+export type Tab = TranslationTab | TafsirTab | AiTab;
 
 interface TabsValue {
   tabs: Tab[];
@@ -38,6 +49,8 @@ interface TabsValue {
   openTranslationTab(language: TranslationLanguage): void;
   /** Opens a Tafsir Tab for the source and language, or focuses it if one is already open. */
   openTafsirTab(source: TafsirSource, language: TranslationLanguage): void;
+  /** Opens a new AI Tab — always a fresh conversation, never a focus of an existing one. */
+  openAiTab(): void;
   closeTab(id: string): void;
   activateTab(id: string): void;
 }
@@ -57,6 +70,8 @@ export const translationTabId = (language: TranslationLanguage) => `translation:
 export const tafsirTabId = (source: TafsirSource, language: TranslationLanguage) =>
   `tafsir:${source}:${language}`;
 
+const aiTabId = (conversation: number) => `ai:${conversation}`;
+
 const translationTab = (language: TranslationLanguage): Tab => ({
   id: translationTabId(language),
   kind: "translation",
@@ -69,6 +84,14 @@ const tafsirTab = (source: TafsirSource, language: TranslationLanguage): Tab => 
   source,
   language,
 });
+
+// Numbered past whatever the reader currently has open, so a new conversation never lands on the
+// id of one already on screen. A number frees up again once no open AI Tab is above it.
+const nextAiTab = (visible: readonly Tab[]): Tab => {
+  const conversations = visible.filter((tab) => tab.kind === "ai").map((tab) => tab.conversation);
+  const conversation = Math.max(0, ...conversations) + 1;
+  return { id: aiTabId(conversation), kind: "ai", conversation };
+};
 
 // A reader's browser locales don't change mid-session, so there is nothing to subscribe to.
 const noLocaleChanges = () => () => {};
@@ -139,6 +162,11 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     [openTab],
   );
 
+  // Every other Tab is identified by what it shows, so opening one twice focuses it. A conversation
+  // has no such identity: its number comes from the Tabs the reader can see, which makes every
+  // press a Tab openTab has never seen and so always a new conversation.
+  const openAiTab = useCallback(() => openTab(nextAiTab(tabs)), [openTab, tabs]);
+
   const closeTab = useCallback(
     (id: string) => {
       rearrangeTabs((visible) => visible.filter((tab) => tab.id !== id));
@@ -153,10 +181,11 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       readerLanguage,
       openTranslationTab,
       openTafsirTab,
+      openAiTab,
       closeTab,
       activateTab: setRequestedTabId,
     }),
-    [tabs, activeTabId, readerLanguage, openTranslationTab, openTafsirTab, closeTab],
+    [tabs, activeTabId, readerLanguage, openTranslationTab, openTafsirTab, openAiTab, closeTab],
   );
 
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;
