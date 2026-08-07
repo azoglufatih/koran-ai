@@ -41,6 +41,29 @@ into the public domain (Unlicense). Each translation is credited to its translat
 Each translator is credited in the UI, at the foot of their Translation Tab. Regenerate the
 vendored text with `npm run vendor:translations`.
 
+## Tafsir — Al-Mukhtasar
+
+The commentary in `public/content/tafsir/` is
+**Al-Mukhtasar fi Tafsir al-Quran al-Karim** (the Abridged Explanation of the Noble Quran),
+published by the **Tafsir Center for Qur'anic Studies** and distributed through
+[Tarteel's Quranic Universal Library](https://qul.tarteel.ai) under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/):
+
+| Language | Edition | QUL resource |
+| --- | --- | --- |
+| English | Al-Mukhtasar | [266](https://qul.tarteel.ai/resources/tafsir/266) |
+| Türkçe | Muhtasar Tefsir | [258](https://qul.tarteel.ai/resources/tafsir/258) |
+
+QUL serves its exports from behind a sign-in, so the text is vendored from
+[spa5k/tafsir_api](https://github.com/spa5k/tafsir_api), which mirrors those exports verbatim as
+per-Surah JSON and names the QUL resource each edition came from.
+
+The Tafsir Center is credited in the UI, at the foot of each Tafsir Tab, with a link to the QUL
+resource. Regenerate the vendored commentary with `npm run vendor:tafsir`.
+
+There is no German edition: no tafsir with a licence that allows redistribution has been found in
+German. A German Tafsir Tab says so explicitly rather than appearing broken or empty.
+
 ## Surah metadata
 
 Surah names, Ayah counts, and revelation places come from the

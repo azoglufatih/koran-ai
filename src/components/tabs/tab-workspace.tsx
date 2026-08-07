@@ -1,15 +1,21 @@
 "use client";
 
-import { quranContent } from "@/content/bundled-quran";
-import type { TranslationEdition } from "@/content/quran";
-import { useTabs, type Tab } from "./tabs-provider";
+import { TAFSIR_SOURCES, type TranslationLanguage } from "@/content/quran";
+import { languageLabel, readerLanguages } from "./reader-languages";
+import { tafsirLanguages } from "./tafsir-editions";
+import { tafsirTabId, translationTabId, useTabs, type Tab } from "./tabs-provider";
+import { TafsirTabContent } from "./tafsir-tab-content";
 import { TranslationTabContent } from "./translation-tab-content";
 
-const editions = quranContent.listTranslationEditions();
-const editionsByLanguage = new Map(editions.map((edition) => [edition.language, edition]));
+// v1 ships one tafsir; when a second lands, the Tafsir menu grows a source dimension.
+const [TAFSIR_SOURCE] = TAFSIR_SOURCES;
+
+const languagesWithTafsir = new Set(tafsirLanguages(TAFSIR_SOURCE));
 
 function tabLabel(tab: Tab): string {
-  return editionsByLanguage.get(tab.language)?.label ?? tab.language;
+  return tab.kind === "translation"
+    ? languageLabel(tab.language)
+    : `Tafsir · ${languageLabel(tab.language)}`;
 }
 
 /**
@@ -57,11 +63,14 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
           ))}
         </div>
 
-        <p className="flex-1 text-sm text-black/55 md:hidden dark:text-white/55">
-          {tabs.length > 1 ? `${tabs.length} Tabs — swipe to compare` : "Translation"}
+        <p className="flex-1 truncate text-sm text-black/55 md:hidden dark:text-white/55">
+          {tabs.length > 1
+            ? `${tabs.length} Tabs — swipe to compare`
+            : tabs[0] && tabLabel(tabs[0])}
         </p>
 
         <OpenTranslationTab />
+        <OpenTafsirTab />
       </div>
 
       {tabs.length === 0 ? (
@@ -84,13 +93,24 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
                 <CloseTabButton label={tabLabel(tab)} onClose={() => closeTab(tab.id)} />
               </header>
 
-              <TranslationTabContent surahNumber={surahNumber} language={tab.language} />
+              <TabContent tab={tab} surahNumber={surahNumber} />
             </article>
           ))}
         </div>
       )}
     </section>
   );
+}
+
+function TabContent({ tab, surahNumber }: { tab: Tab; surahNumber: number }) {
+  switch (tab.kind) {
+    case "translation":
+      return <TranslationTabContent surahNumber={surahNumber} language={tab.language} />;
+    case "tafsir":
+      return (
+        <TafsirTabContent surahNumber={surahNumber} source={tab.source} language={tab.language} />
+      );
+  }
 }
 
 function CloseTabButton({ label, onClose }: { label: string; onClose: () => void }) {
@@ -108,30 +128,81 @@ function CloseTabButton({ label, onClose }: { label: string; onClose: () => void
 
 function OpenTranslationTab() {
   const { tabs, openTranslationTab } = useTabs();
-  const isOpen = (edition: TranslationEdition) =>
-    tabs.some((tab) => tab.language === edition.language);
+  const isOpen = (language: TranslationLanguage) =>
+    tabs.some((tab) => tab.id === translationTabId(language));
 
+  return (
+    <AddTabMenu label="+ Translation">
+      {readerLanguages.map((language) => (
+        <AddTabOption
+          key={language}
+          label={languageLabel(language)}
+          hint={isOpen(language) ? "open" : undefined}
+          onOpen={() => openTranslationTab(language)}
+        />
+      ))}
+    </AddTabMenu>
+  );
+}
+
+function OpenTafsirTab() {
+  const { tabs, openTafsirTab } = useTabs();
+  const isOpen = (language: TranslationLanguage) =>
+    tabs.some((tab) => tab.id === tafsirTabId(TAFSIR_SOURCE, language));
+
+  // A language without an edition still gets offered: the Tab it opens explains the gap, which is
+  // more use to a reader than their language quietly missing from the menu.
+  const hint = (language: TranslationLanguage) => {
+    if (isOpen(language)) return "open";
+    return languagesWithTafsir.has(language) ? undefined : "not yet";
+  };
+
+  return (
+    <AddTabMenu label="+ Tafsir">
+      {readerLanguages.map((language) => (
+        <AddTabOption
+          key={language}
+          label={languageLabel(language)}
+          hint={hint(language)}
+          onOpen={() => openTafsirTab(TAFSIR_SOURCE, language)}
+        />
+      ))}
+    </AddTabMenu>
+  );
+}
+
+function AddTabMenu({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <details className="relative shrink-0">
       <summary className="cursor-pointer list-none rounded-lg border border-black/15 px-3 py-1.5 text-sm text-black/65 marker:content-none hover:text-black dark:border-white/15 dark:text-white/65 dark:hover:text-white">
-        + Translation
+        {label}
       </summary>
       <ul className="bg-parchment dark:bg-night absolute right-0 z-20 mt-1 w-48 rounded-lg border border-black/10 p-1 shadow-lg dark:border-white/10">
-        {editions.map((edition) => (
-          <li key={edition.language}>
-            <button
-              type="button"
-              onClick={() => openTranslationTab(edition.language)}
-              className="flex w-full items-baseline justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
-            >
-              {edition.label}
-              {isOpen(edition) && (
-                <span className="text-xs text-black/40 dark:text-white/40">open</span>
-              )}
-            </button>
-          </li>
-        ))}
+        {children}
       </ul>
     </details>
+  );
+}
+
+function AddTabOption({
+  label,
+  hint,
+  onOpen,
+}: {
+  label: string;
+  hint?: string;
+  onOpen: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex w-full items-baseline justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
+      >
+        {label}
+        {hint && <span className="text-xs text-black/40 dark:text-white/40">{hint}</span>}
+      </button>
+    </li>
   );
 }

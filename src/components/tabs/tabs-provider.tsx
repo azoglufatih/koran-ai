@@ -9,11 +9,10 @@ import {
   useSyncExternalStore,
 } from "react";
 import { detectTranslationLanguage } from "@/content/translation-language";
-import type { TranslationLanguage } from "@/content/quran";
+import type { TafsirSource, TranslationLanguage } from "@/content/quran";
 
 /**
- * A Tab the reader has opened alongside the Reading Pane. Translation is the only kind so far;
- * Tafsir and AI Tabs join this union as they land.
+ * A Tab the reader has opened alongside the Reading Pane. The AI Tab joins this union as it lands.
  */
 export interface TranslationTab {
   id: string;
@@ -21,7 +20,14 @@ export interface TranslationTab {
   language: TranslationLanguage;
 }
 
-export type Tab = TranslationTab;
+export interface TafsirTab {
+  id: string;
+  kind: "tafsir";
+  source: TafsirSource;
+  language: TranslationLanguage;
+}
+
+export type Tab = TranslationTab | TafsirTab;
 
 interface TabsValue {
   tabs: Tab[];
@@ -30,6 +36,8 @@ interface TabsValue {
   readerLanguage: TranslationLanguage | null;
   /** Opens a Translation Tab for the language, or focuses it if one is already open. */
   openTranslationTab(language: TranslationLanguage): void;
+  /** Opens a Tafsir Tab for the source and language, or focuses it if one is already open. */
+  openTafsirTab(source: TafsirSource, language: TranslationLanguage): void;
   closeTab(id: string): void;
   activateTab(id: string): void;
 }
@@ -42,11 +50,23 @@ export function useTabs(): TabsValue {
   return value;
 }
 
-const translationTabId = (language: TranslationLanguage) => `translation:${language}`;
+// A Tab's identity is what it shows, so opening the same thing twice focuses the Tab already
+// showing it. Exported so the menus can ask whether a Tab is open without re-deriving the id.
+export const translationTabId = (language: TranslationLanguage) => `translation:${language}`;
+
+export const tafsirTabId = (source: TafsirSource, language: TranslationLanguage) =>
+  `tafsir:${source}:${language}`;
 
 const translationTab = (language: TranslationLanguage): Tab => ({
   id: translationTabId(language),
   kind: "translation",
+  language,
+});
+
+const tafsirTab = (source: TafsirSource, language: TranslationLanguage): Tab => ({
+  id: tafsirTabId(source, language),
+  kind: "tafsir",
+  source,
   language,
 });
 
@@ -98,15 +118,25 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
     [readerLanguage],
   );
 
-  const openTranslationTab = useCallback(
-    (language: TranslationLanguage) => {
-      const id = translationTabId(language);
+  // Opening a Tab the reader already has open focuses it instead of stacking a duplicate.
+  const openTab = useCallback(
+    (tab: Tab) => {
       rearrangeTabs((visible) =>
-        visible.some((tab) => tab.id === id) ? visible : [...visible, translationTab(language)],
+        visible.some((open) => open.id === tab.id) ? visible : [...visible, tab],
       );
-      setRequestedTabId(id);
+      setRequestedTabId(tab.id);
     },
     [rearrangeTabs],
+  );
+
+  const openTranslationTab = useCallback(
+    (language: TranslationLanguage) => openTab(translationTab(language)),
+    [openTab],
+  );
+
+  const openTafsirTab = useCallback(
+    (source: TafsirSource, language: TranslationLanguage) => openTab(tafsirTab(source, language)),
+    [openTab],
   );
 
   const closeTab = useCallback(
@@ -122,10 +152,11 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
       activeTabId,
       readerLanguage,
       openTranslationTab,
+      openTafsirTab,
       closeTab,
       activateTab: setRequestedTabId,
     }),
-    [tabs, activeTabId, readerLanguage, openTranslationTab, closeTab],
+    [tabs, activeTabId, readerLanguage, openTranslationTab, openTafsirTab, closeTab],
   );
 
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;

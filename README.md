@@ -10,8 +10,9 @@ configuration lives only in the reader's own browser
 ## Status
 
 Early. Currently implemented: the Arabic Reading Pane — the full Quran in Arabic, navigable by
-Surah and Ayah — plus Translation Tabs in English, Turkish, and German, opened alongside it.
-Tafsir Tabs and the AI Tab are tracked as open issues.
+Surah and Ayah — plus Translation Tabs in English, Turkish, and German and Tafsir Tabs
+(Al-Mukhtasar, in English and Turkish), opened alongside it. The AI Tab is tracked as an open
+issue.
 
 ## Getting started
 
@@ -33,13 +34,14 @@ Then open http://localhost:3000.
 | `npm run lint` | ESLint |
 | `npm run vendor:quran` | Regenerate the vendored Arabic corpus (output is committed) |
 | `npm run vendor:translations` | Regenerate the vendored translations (output is committed) |
+| `npm run vendor:tafsir` | Regenerate the vendored tafsir (output is committed) |
 
 ## Layout
 
 - `src/content/` — the Quran Content Repository seam. `quran-content-repository.ts` is the
   interface every caller reads content through; `data/` is the vendored Arabic corpus.
-- `public/content/translations/` — the vendored translations, fetched when a Translation Tab is
-  opened rather than bundled into the page.
+- `public/content/translations/`, `public/content/tafsir/` — the vendored translations and
+  commentary, fetched when a Tab is opened rather than bundled into the page.
 - `src/app/`, `src/components/` — the Reading Pane and Tab UI.
 - `scripts/` — regenerates and validates the vendored content.
 

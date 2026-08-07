@@ -3,7 +3,10 @@ import type {
   AyahRef,
   Surah,
   SurahSummary,
+  SurahTafsir,
   SurahTranslation,
+  TafsirEdition,
+  TafsirSource,
   TranslationEdition,
   TranslationLanguage,
 } from "./quran";
@@ -15,6 +18,12 @@ export type TranslationTextLoader = (
   language: TranslationLanguage,
 ) => Promise<readonly string[]>;
 
+export type TafsirTextLoader = (
+  surahNumber: number,
+  source: TafsirSource,
+  language: TranslationLanguage,
+) => Promise<readonly string[]>;
+
 export interface QuranContentRepository {
   listSurahs(): SurahSummary[];
   getSurahSummary(surahNumber: number): SurahSummary | undefined;
@@ -22,23 +31,40 @@ export interface QuranContentRepository {
   getAyah(ref: AyahRef): Promise<Ayah>;
   listTranslationEditions(): TranslationEdition[];
   getTranslation(surahNumber: number, language: TranslationLanguage): Promise<SurahTranslation>;
+  /** Only the editions that exist — a language absent here has no tafsir in this corpus. */
+  listTafsirEditions(): TafsirEdition[];
+  getTafsir(
+    surahNumber: number,
+    source: TafsirSource,
+    language: TranslationLanguage,
+  ): Promise<SurahTafsir>;
 }
 
 export interface QuranContentSources {
   surahIndex: readonly SurahSummary[];
   translationEditions: readonly TranslationEdition[];
+  tafsirEditions: readonly TafsirEdition[];
   loadSurahText: SurahTextLoader;
   loadTranslationText: TranslationTextLoader;
+  loadTafsirText: TafsirTextLoader;
 }
+
+const tafsirEditionKey = (source: TafsirSource, language: TranslationLanguage) =>
+  `${source}:${language}`;
 
 export function createQuranContentRepository({
   surahIndex,
   translationEditions,
+  tafsirEditions,
   loadSurahText,
   loadTranslationText,
+  loadTafsirText,
 }: QuranContentSources): QuranContentRepository {
   const summaries = new Map(surahIndex.map((summary) => [summary.number, summary]));
   const editions = new Map(translationEditions.map((edition) => [edition.language, edition]));
+  const commentaries = new Map(
+    tafsirEditions.map((edition) => [tafsirEditionKey(edition.source, edition.language), edition]),
+  );
 
   const getSurahSummary = (surahNumber: number) => summaries.get(surahNumber);
 
@@ -90,6 +116,32 @@ export function createQuranContentRepository({
         ayahs: text.map((translatedText, index) => ({
           ref: { surah: surahNumber, ayah: index + 1 },
           text: translatedText,
+        })),
+      };
+    },
+    listTafsirEditions: () => [...tafsirEditions],
+    async getTafsir(surahNumber, source, language) {
+      const summary = requireSummary(surahNumber);
+      const edition = commentaries.get(tafsirEditionKey(source, language));
+      // A tafsir the corpus has no edition of in this language is a known gap, not a failure —
+      // callers get something they can render as such rather than an exception to catch.
+      if (!edition) return { available: false, source, language };
+
+      const text = await loadTafsirText(surahNumber, source, language);
+      // Commentary is addressed per Ayah, so a drifting edition would attach an Ayah's tafsir to
+      // its neighbour — the same correctness bug a drifting translation is.
+      if (text.length !== summary.ayahCount) {
+        throw new RangeError(
+          `Surah ${surahNumber}: expected ${summary.ayahCount} commented Ayahs, got ${text.length}`,
+        );
+      }
+
+      return {
+        available: true,
+        edition,
+        ayahs: text.map((commentary, index) => ({
+          ref: { surah: surahNumber, ayah: index + 1 },
+          text: commentary,
         })),
       };
     },

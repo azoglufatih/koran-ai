@@ -1,0 +1,16 @@
+[
+  {
+    "source": "al-mukhtasar",
+    "language": "en",
+    "name": "Al-Mukhtasar",
+    "attribution": "Tafsir Center for Qur'anic Studies",
+    "attributionUrl": "https://qul.tarteel.ai/resources/tafsir/266"
+  },
+  {
+    "source": "al-mukhtasar",
+    "language": "tr",
+    "name": "Muhtasar Tefsir",
+    "attribution": "Tafsir Center for Qur'anic Studies",
+    "attributionUrl": "https://qul.tarteel.ai/resources/tafsir/258"
+  }
+]

@@ -50,3 +50,36 @@ export interface SurahTranslation {
   edition: TranslationEdition;
   ayahs: TranslatedAyah[];
 }
+
+/** The tafsirs a Tafsir Tab can be opened in. Al-Mukhtasar is the only one so far. */
+export const TAFSIR_SOURCES = ["al-mukhtasar"] as const;
+
+export type TafsirSource = (typeof TAFSIR_SOURCES)[number];
+
+/**
+ * One tafsir source in one language. Tafsir is keyed by the same reader languages as translations,
+ * but is not available in all of them — see `SurahTafsir`.
+ */
+export interface TafsirEdition {
+  source: TafsirSource;
+  language: TranslationLanguage;
+  /** The tafsir's name in this language, as it should be shown and credited. */
+  name: string;
+  /** Who the commentary is credited to, as required by its licence. */
+  attribution: string;
+  attributionUrl: string;
+}
+
+export interface TafsirAyah {
+  ref: AyahRef;
+  text: string;
+}
+
+/**
+ * A Surah's commentary, or an explicit statement that this source has no edition in this language
+ * — a known gap (German has no redistribution-safe tafsir), not an error the reader should see as
+ * a failure.
+ */
+export type SurahTafsir =
+  | { available: true; edition: TafsirEdition; ayahs: TafsirAyah[] }
+  | { available: false; source: TafsirSource; language: TranslationLanguage };

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { createQuranContentRepository } from "./quran-content-repository";
-import type { SurahSummary, TranslationEdition, TranslationLanguage } from "./quran";
+import type {
+  SurahSummary,
+  TafsirEdition,
+  TafsirSource,
+  TranslationEdition,
+  TranslationLanguage,
+} from "./quran";
 
 const AL_FAATIHA: SurahSummary = {
   number: 1,
@@ -60,19 +66,52 @@ const FIXTURE_TRANSLATIONS: Record<string, Record<number, string[]>> = {
   },
 };
 
+const ENGLISH_MUKHTASAR: TafsirEdition = {
+  source: "al-mukhtasar",
+  language: "en",
+  name: "Al-Mukhtasar",
+  attribution: "Tafsir Center for Qur'anic Studies",
+  attributionUrl: "https://qul.tarteel.ai/resources/tafsir/266",
+};
+
+const TURKISH_MUKHTASAR: TafsirEdition = {
+  source: "al-mukhtasar",
+  language: "tr",
+  name: "Muhtasar Tefsir",
+  attribution: "Tafsir Center for Qur'anic Studies",
+  attributionUrl: "https://qul.tarteel.ai/resources/tafsir/258",
+};
+
+const FIXTURE_TAFSIR: Record<string, Record<number, string[]>> = {
+  en: {
+    1: ["Calling on Allah", "All praise belongs to Allah", "Two names of Allah"],
+    2: ["Disjointed letters", "This Quran is beyond doubt"],
+  },
+  tr: {
+    1: ["Allah'ın adıyla okumaya başlıyorum", "Bütün övgüler Allah içindir", "Allah'ın iki ismi"],
+    2: ["Hurûf-i mukattaa", "Bu Kur'an'da şüphe yoktur"],
+  },
+};
+
 function createRepository() {
   const loadSurahText = vi.fn(async (surahNumber: number) => FIXTURE_TEXT[surahNumber]);
   const loadTranslationText = vi.fn(
     async (surahNumber: number, language: TranslationLanguage) =>
       FIXTURE_TRANSLATIONS[language][surahNumber],
   );
+  const loadTafsirText = vi.fn(
+    async (surahNumber: number, _source: TafsirSource, language: TranslationLanguage) =>
+      FIXTURE_TAFSIR[language][surahNumber],
+  );
   const repository = createQuranContentRepository({
     surahIndex: [AL_FAATIHA, AL_BAQARA],
     translationEditions: [ENGLISH, TURKISH, GERMAN],
+    tafsirEditions: [ENGLISH_MUKHTASAR, TURKISH_MUKHTASAR],
     loadSurahText,
     loadTranslationText,
+    loadTafsirText,
   });
-  return { repository, loadSurahText, loadTranslationText };
+  return { repository, loadSurahText, loadTranslationText, loadTafsirText };
 }
 
 describe("listSurahs", () => {
@@ -207,10 +246,81 @@ describe("getTranslation", () => {
   });
 });
 
+describe("getTafsir", () => {
+  it("returns the edition alongside every Ayah's commentary, in order", async () => {
+    const { repository } = createRepository();
+
+    const tafsir = await repository.getTafsir(1, "al-mukhtasar", "en");
+
+    expect(tafsir).toEqual({
+      available: true,
+      edition: ENGLISH_MUKHTASAR,
+      ayahs: [
+        { ref: { surah: 1, ayah: 1 }, text: "Calling on Allah" },
+        { ref: { surah: 1, ayah: 2 }, text: "All praise belongs to Allah" },
+        { ref: { surah: 1, ayah: 3 }, text: "Two names of Allah" },
+      ],
+    });
+  });
+
+  it("reports a language the source has no edition in as unavailable, without loading text", async () => {
+    const { repository, loadTafsirText } = createRepository();
+
+    await expect(repository.getTafsir(1, "al-mukhtasar", "de")).resolves.toEqual({
+      available: false,
+      source: "al-mukhtasar",
+      language: "de",
+    });
+    expect(loadTafsirText).not.toHaveBeenCalled();
+  });
+
+  it("serves each language the source covers from its own edition", async () => {
+    const { repository } = createRepository();
+
+    const [english, turkish] = await Promise.all([
+      repository.getTafsir(2, "al-mukhtasar", "en"),
+      repository.getTafsir(2, "al-mukhtasar", "tr"),
+    ]);
+
+    expect(english).toMatchObject({
+      edition: ENGLISH_MUKHTASAR,
+      ayahs: [{ text: "Disjointed letters" }, { text: "This Quran is beyond doubt" }],
+    });
+    expect(turkish).toMatchObject({
+      edition: TURKISH_MUKHTASAR,
+      ayahs: [{ text: "Hurûf-i mukattaa" }, { text: "Bu Kur'an'da şüphe yoktur" }],
+    });
+  });
+
+  it("rejects a tafsir that does not align Ayah-for-Ayah with the Arabic", async () => {
+    const { repository, loadTafsirText } = createRepository();
+    loadTafsirText.mockResolvedValueOnce(["Disjointed letters"]);
+
+    await expect(repository.getTafsir(2, "al-mukhtasar", "en")).rejects.toThrow(
+      "Surah 2: expected 2 commented Ayahs, got 1",
+    );
+  });
+
+  it("rejects a Surah outside the corpus without loading any tafsir", async () => {
+    const { repository, loadTafsirText } = createRepository();
+
+    await expect(repository.getTafsir(115, "al-mukhtasar", "en")).rejects.toThrow("Surah 115");
+    expect(loadTafsirText).not.toHaveBeenCalled();
+  });
+});
+
 describe("listTranslationEditions", () => {
   it("returns every edition a Translation Tab can be opened in", () => {
     const { repository } = createRepository();
 
     expect(repository.listTranslationEditions()).toEqual([ENGLISH, TURKISH, GERMAN]);
+  });
+});
+
+describe("listTafsirEditions", () => {
+  it("returns only the editions a Tafsir Tab has commentary for", () => {
+    const { repository } = createRepository();
+
+    expect(repository.listTafsirEditions()).toEqual([ENGLISH_MUKHTASAR, TURKISH_MUKHTASAR]);
   });
 });
