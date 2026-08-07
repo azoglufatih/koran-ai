@@ -31,7 +31,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* Tabs live above the routes so a reader's open Tabs survive moving between Surahs. */}
         <TabsProvider>
-          <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{children}</main>
+          {/* Each route owns its own width: the Surah page widens when Tabs are open. */}
+          <main className="w-full flex-1 px-4 py-8">{children}</main>
         </TabsProvider>
 
         <footer className="mt-12 border-t border-black/10 dark:border-white/10">

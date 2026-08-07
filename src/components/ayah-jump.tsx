@@ -9,7 +9,9 @@ export function AyahJump({ ayahCount }: { ayahCount: number }) {
         Jump to an Ayah
         <span className="float-right transition-transform group-open:rotate-180">&#9662;</span>
       </summary>
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-1 border-t border-black/10 p-2 dark:border-white/10">
+      {/* Capped: Al-Baqara's 286 Ayahs would otherwise push the Reading Pane off screen, so a
+          jump would land on an Ayah the reader can't see. */}
+      <ul className="grid max-h-56 grid-cols-[repeat(auto-fill,minmax(2.75rem,1fr))] gap-1 overflow-y-auto border-t border-black/10 p-2 dark:border-white/10">
         {ayahNumbers.map((ayah) => (
           <li key={ayah}>
             <a

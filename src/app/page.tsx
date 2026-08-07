@@ -5,7 +5,7 @@ export default function SurahIndexPage() {
   const surahs = quranContent.listSurahs();
 
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">The Quran</h1>
       <p className="mt-1 text-sm text-black/55 dark:text-white/55">
         114 Surahs in Arabic. Pick one to start reading.
@@ -34,6 +34,6 @@ export default function SurahIndexPage() {
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }

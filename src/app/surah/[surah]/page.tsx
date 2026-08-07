@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { quranContent } from "@/content/bundled-quran";
 import { ReadingPane } from "@/components/reading-pane";
 import { AyahJump } from "@/components/ayah-jump";
-import { TabWorkspace } from "@/components/tabs/tab-workspace";
+import { ReadingWorkspace } from "@/components/tabs/reading-workspace";
 
 type PageProps = { params: Promise<{ surah: string }> };
 
@@ -28,7 +28,7 @@ export default async function SurahPage({ params }: PageProps) {
 
   return (
     <>
-      <header className="border-b border-black/10 pb-6 text-center dark:border-white/10">
+      <header className="mx-auto max-w-3xl border-b border-black/10 pb-6 text-center dark:border-white/10">
         <p className="text-xs uppercase tracking-widest text-black/40 dark:text-white/40">
           Surah {summary.number} &middot; {summary.revelationPlace === "meccan" ? "Meccan" : "Medinan"}
         </p>
@@ -41,13 +41,15 @@ export default async function SurahPage({ params }: PageProps) {
         </p>
       </header>
 
-      <AyahJump ayahCount={summary.ayahCount} />
+      <div className="mx-auto max-w-3xl">
+        <AyahJump ayahCount={summary.ayahCount} />
+      </div>
 
-      <ReadingPane surah={surah} />
+      <ReadingWorkspace surahNumber={summary.number}>
+        <ReadingPane surah={surah} />
+      </ReadingWorkspace>
 
-      <TabWorkspace surahNumber={summary.number} />
-
-      <nav className="mt-10 flex items-center justify-between gap-3 border-t border-black/10 pt-6 text-sm dark:border-white/10">
+      <nav className="mx-auto mt-10 flex max-w-3xl items-center justify-between gap-3 border-t border-black/10 pt-6 text-sm dark:border-white/10">
         {previous ? (
           <Link href={`/surah/${previous.number}`} className="hover:underline">
             &larr; {previous.transliteratedName}

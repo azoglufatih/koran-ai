@@ -16,13 +16,23 @@ function tabLabel(tab: Tab): string {
  * The Tabs the reader has open alongside the Reading Pane. Desktop gets a horizontal strip with
  * one panel showing at a time; mobile gets the same Tabs as swipeable panels, since a strip of
  * them is unusable at that width. Both read the one Tab list from TabsProvider.
+ *
+ * Once ReadingWorkspace puts this beside the Reading Pane, the strip stays put and only the
+ * panels scroll — the divider that separates the two when stacked is no longer needed.
  */
 export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
   const { tabs, activeTabId, readerLanguage, closeTab, activateTab } = useTabs();
+  const sideBySide = tabs.length > 0;
 
   return (
-    <section className="mt-10 border-t border-black/10 pt-6 dark:border-white/10">
-      <div className="flex items-end gap-3">
+    <section
+      className={`mt-10 border-t border-black/10 pt-6 dark:border-white/10 ${
+        sideBySide
+          ? "xl:mt-0 xl:flex xl:h-[calc(100dvh-9rem)] xl:flex-col xl:border-t-0 xl:pt-0"
+          : ""
+      }`}
+    >
+      <div className="flex items-end gap-3 xl:shrink-0">
         <div className="hidden min-w-0 flex-1 flex-wrap gap-1 md:flex" role="tablist">
           {tabs.map((tab) => (
             <div
@@ -61,7 +71,7 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
             : "No Tabs open — the Reading Pane is showing Arabic only. Add a translation above."}
         </p>
       ) : (
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 md:mx-0 md:block md:snap-none md:overflow-x-visible md:px-0">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 md:mx-0 md:block md:snap-none md:overflow-x-visible md:px-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-3">
           {tabs.map((tab) => (
             <article
               key={tab.id}
