@@ -2,6 +2,7 @@
 
 import { quranContent } from "@/content/bundled-quran";
 import type { TranslationLanguage } from "@/content/quran";
+import { translationAyahMarks } from "@/components/selection/ayah-marks";
 import { AyahTextList } from "./ayah-text-list";
 import { LoadedTabContent } from "./loaded-tab-content";
 
@@ -20,7 +21,10 @@ export function TranslationTabContent({
     >
       {({ edition, ayahs }) => (
         <div lang={edition.language}>
-          <AyahTextList ayahs={ayahs} />
+          <AyahTextList
+            ayahs={ayahs}
+            ayahMarks={(ref) => translationAyahMarks(ref, edition.language)}
+          />
 
           <p className="mt-4 text-xs text-black/45 dark:text-white/45">
             Translated by {edition.translator}.

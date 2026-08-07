@@ -1,5 +1,6 @@
 "use client";
 
+import { AskAboutSelection } from "@/components/selection/ask-about-selection";
 import { useTabs } from "./tabs-provider";
 import { TabWorkspace } from "./tab-workspace";
 
@@ -34,6 +35,8 @@ export function ReadingWorkspace({
 
         <TabWorkspace surahNumber={surahNumber} />
       </div>
+
+      <AskAboutSelection />
     </div>
   );
 }

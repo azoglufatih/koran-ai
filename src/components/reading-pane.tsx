@@ -1,5 +1,6 @@
 import type { Surah } from "@/content/quran";
 import { ayahAnchorId } from "./ayah-anchor";
+import { arabicAyahMarks } from "./selection/ayah-marks";
 
 export function ReadingPane({ surah }: { surah: Surah }) {
   return (
@@ -20,7 +21,12 @@ export function ReadingPane({ surah }: { surah: Surah }) {
             <span className="mt-2 w-8 shrink-0 text-xs tabular-nums text-black/35 dark:text-white/35">
               {surah.summary.number}:{ayah.ref.ayah}
             </span>
-            <p dir="rtl" lang="ar" className="font-arabic flex-1 text-2xl leading-[2.4]">
+            <p
+              dir="rtl"
+              lang="ar"
+              className="font-arabic flex-1 text-2xl leading-[2.4]"
+              {...arabicAyahMarks(ayah.ref)}
+            >
               {ayah.arabicText}
             </p>
           </li>

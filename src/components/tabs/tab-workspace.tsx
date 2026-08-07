@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { TAFSIR_SOURCES, type TranslationLanguage } from "@/content/quran";
+import { activeTabMarks } from "@/components/selection/ayah-marks";
 import { languageLabel, readerLanguages } from "./reader-languages";
 import { tafsirLanguages } from "./tafsir-editions";
 import { tafsirTabId, translationTabId, useTabs, type Tab } from "./tabs-provider";
@@ -20,7 +22,11 @@ function tabLabel(tab: Tab): string {
     case "tafsir":
       return `Tafsir · ${languageLabel(tab.language)}`;
     case "ai":
-      return `AI ${tab.conversation}`;
+      // A conversation about an Ayah is named after it: with several AI Tabs open, "AI · 2:40"
+      // says which is which where a bare number cannot.
+      return tab.verseContext
+        ? `AI · ${tab.verseContext.ref.surah}:${tab.verseContext.ref.ayah}`
+        : `AI ${tab.conversation}`;
   }
 }
 
@@ -35,6 +41,7 @@ function tabLabel(tab: Tab): string {
 export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
   const { tabs, activeTabId, readerLanguage, closeTab, activateTab } = useTabs();
   const sideBySide = tabs.length > 0;
+  const panels = useShowingActiveTab(activeTabId);
 
   return (
     <section
@@ -87,10 +94,14 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
             : "No Tabs open — the Reading Pane is showing Arabic only. Add a translation above."}
         </p>
       ) : (
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 md:mx-0 md:block md:snap-none md:overflow-x-visible md:px-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-3">
+        <div
+          ref={panels}
+          className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 md:mx-0 md:block md:snap-none md:overflow-x-visible md:px-0 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-3"
+        >
           {tabs.map((tab) => (
             <article
               key={tab.id}
+              {...activeTabMarks(tab.id === activeTabId)}
               className={`shrink-0 snap-start md:w-full ${tabs.length > 1 ? "w-[88%]" : "w-full"} ${
                 tab.id === activeTabId ? "" : "md:hidden"
               }`}
@@ -109,6 +120,30 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
   );
 }
 
+/**
+ * Brings a Tab the reader has just switched to into view. On mobile the Tabs are a swipeable strip
+ * below the Reading Pane, so asking about a selection would otherwise open an AI Tab off-screen
+ * and look like nothing happened. Only movement the reader caused scrolls: the Tab showing on
+ * arrival is left where it is, at the bottom of a page they haven't read yet.
+ */
+function useShowingActiveTab(activeTabId: string | null) {
+  const panels = useRef<HTMLDivElement>(null);
+  const showing = useRef<string | null>(null);
+
+  useEffect(() => {
+    const switched = showing.current !== null && showing.current !== activeTabId;
+    showing.current = activeTabId;
+    if (!switched) return;
+
+    // "nearest" leaves a Tab already on screen alone — on a wide screen, every switch is one.
+    panels.current
+      ?.querySelector("[data-tab-active]")
+      ?.scrollIntoView({ block: "nearest", inline: "start" });
+  }, [activeTabId]);
+
+  return panels;
+}
+
 function TabContent({ tab, surahNumber }: { tab: Tab; surahNumber: number }) {
   switch (tab.kind) {
     case "translation":
@@ -118,7 +153,7 @@ function TabContent({ tab, surahNumber }: { tab: Tab; surahNumber: number }) {
         <TafsirTabContent surahNumber={surahNumber} source={tab.source} language={tab.language} />
       );
     case "ai":
-      return <AiTabContent />;
+      return <AiTabContent verseContext={tab.verseContext} />;
   }
 }
 
@@ -187,7 +222,9 @@ function OpenAiTab() {
   return (
     <button
       type="button"
-      onClick={openAiTab}
+      // Called with no argument: a Tab opened from here is an open-ended conversation, and the
+      // click event is not a Verse Context.
+      onClick={() => openAiTab()}
       className="shrink-0 rounded-lg border border-black/15 px-3 py-1.5 text-sm text-black/65 hover:text-black dark:border-white/15 dark:text-white/65 dark:hover:text-white"
     >
       + AI

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { aiClient } from "@/ai/browser-ai-client";
 import type { ChatMessage } from "@/ai/ai-client";
+import { selectedText, type VerseContext } from "@/ai/verse-context";
 import { ProviderSettings } from "@/components/ai/provider-settings";
 import { useAiProviderConfig } from "@/components/ai/use-ai-provider-config";
 import { RetryNotice } from "./retry-notice";
@@ -11,8 +12,11 @@ import { RetryNotice } from "./retry-notice";
  * One AI Tab: a conversation of its own. The turns live in this component's state, so opening a
  * second AI Tab starts a second conversation and neither loses what came before — closing a Tab is
  * what ends one, since nothing about a reader's questions is written down anywhere.
+ *
+ * A Tab opened from a selection carries the Verse Context that selection made, and every question
+ * asked in it — the first and each follow-up — goes to the provider grounded in that Ayah.
  */
-export function AiTabContent() {
+export function AiTabContent({ verseContext }: { verseContext?: VerseContext }) {
   const { config } = useAiProviderConfig();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
@@ -25,7 +29,7 @@ export function AiTabContent() {
     setIsAsking(true);
     setFailure(null);
     try {
-      const answer = await aiClient.ask({ config, messages: conversation });
+      const answer = await aiClient.ask({ config, messages: conversation, verseContext });
       setMessages([...conversation, { role: "assistant", content: answer }]);
     } catch (error) {
       // The reader's own provider is the only thing that can have failed, and only they can fix
@@ -49,15 +53,25 @@ export function AiTabContent() {
     void ask(conversation);
   }
 
-  if (!config) return <UnconfiguredTab />;
+  // The Verse Context leads either way: a reader who hasn't configured a provider yet should still
+  // see which words they are about to ask about while they do it.
+  if (!config) {
+    return (
+      <AiTabLayout verseContext={verseContext}>
+        <UnconfiguredTab />
+      </AiTabLayout>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-3 py-2">
+    <AiTabLayout verseContext={verseContext}>
       <ActiveProvider />
 
       {messages.length === 0 ? (
         <p className="px-1 py-4 text-sm text-black/45 dark:text-white/45">
-          Ask about anything in this Surah — a word, a phrase, or what a translation is getting at.
+          {verseContext
+            ? "Ask what these words mean, or anything else about this Ayah."
+            : "Ask about anything in this Surah — a word, a phrase, or what a translation is getting at."}
         </p>
       ) : (
         <ol className="space-y-3">
@@ -98,6 +112,49 @@ export function AiTabContent() {
           Ask
         </button>
       </form>
+    </AiTabLayout>
+  );
+}
+
+/** An AI Tab, whatever state it is in, under the Ayah it is grounded in. */
+function AiTabLayout({
+  verseContext,
+  children,
+}: {
+  verseContext?: VerseContext;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 py-2">
+      {verseContext && <GroundedIn context={verseContext} />}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * What the conversation is anchored to, kept in front of the reader: the words they selected, and
+ * a plain statement that the whole Ayah goes with them. Nothing is sent anywhere the reader hasn't
+ * configured themselves, so what *is* sent is worth saying out loud.
+ */
+function GroundedIn({ context }: { context: VerseContext }) {
+  const inArabic = context.selection.in === "arabic";
+
+  return (
+    <div className="rounded-lg border border-black/10 px-3 py-2 dark:border-white/10">
+      <p className="text-xs text-black/45 dark:text-white/45">
+        Asking about Ayah {context.ref.surah}:{context.ref.ayah}
+      </p>
+      <p
+        dir={inArabic ? "rtl" : undefined}
+        lang={inArabic ? "ar" : context.translation?.language}
+        className={`mt-1 text-sm ${inArabic ? "font-arabic text-lg leading-loose" : ""}`}
+      >
+        &ldquo;{selectedText(context)}&rdquo;
+      </p>
+      <p className="mt-1 text-xs text-black/45 dark:text-white/45">
+        The whole Ayah goes with your question, so the answer has its context.
+      </p>
     </div>
   );
 }

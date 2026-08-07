@@ -10,6 +10,7 @@ import {
 } from "react";
 import { detectTranslationLanguage } from "@/content/translation-language";
 import type { TafsirSource, TranslationLanguage } from "@/content/quran";
+import type { VerseContext } from "@/ai/verse-context";
 
 /**
  * A Tab the reader has opened alongside the Reading Pane.
@@ -36,6 +37,11 @@ export interface AiTab {
   id: string;
   kind: "ai";
   conversation: number;
+  /**
+   * The Ayah the reader selected words in to start this conversation. Absent for a Tab they opened
+   * from the Tab strip, which is a question about the Surah at large rather than about one Ayah.
+   */
+  verseContext?: VerseContext;
 }
 
 export type Tab = TranslationTab | TafsirTab | AiTab;
@@ -49,8 +55,11 @@ interface TabsValue {
   openTranslationTab(language: TranslationLanguage): void;
   /** Opens a Tafsir Tab for the source and language, or focuses it if one is already open. */
   openTafsirTab(source: TafsirSource, language: TranslationLanguage): void;
-  /** Opens a new AI Tab — always a fresh conversation, never a focus of an existing one. */
-  openAiTab(): void;
+  /**
+   * Opens a new AI Tab — always a fresh conversation, never a focus of an existing one. Pass the
+   * Verse Context to ground the conversation in one Ayah; omit it to start an open-ended one.
+   */
+  openAiTab(verseContext?: VerseContext): void;
   closeTab(id: string): void;
   activateTab(id: string): void;
 }
@@ -87,10 +96,10 @@ const tafsirTab = (source: TafsirSource, language: TranslationLanguage): Tab => 
 
 // Numbered past whatever the reader currently has open, so a new conversation never lands on the
 // id of one already on screen. A number frees up again once no open AI Tab is above it.
-const nextAiTab = (visible: readonly Tab[]): Tab => {
+const nextAiTab = (visible: readonly Tab[], verseContext?: VerseContext): Tab => {
   const conversations = visible.filter((tab) => tab.kind === "ai").map((tab) => tab.conversation);
   const conversation = Math.max(0, ...conversations) + 1;
-  return { id: aiTabId(conversation), kind: "ai", conversation };
+  return { id: aiTabId(conversation), kind: "ai", conversation, verseContext };
 };
 
 // A reader's browser locales don't change mid-session, so there is nothing to subscribe to.
@@ -164,8 +173,12 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
 
   // Every other Tab is identified by what it shows, so opening one twice focuses it. A conversation
   // has no such identity: its number comes from the Tabs the reader can see, which makes every
-  // press a Tab openTab has never seen and so always a new conversation.
-  const openAiTab = useCallback(() => openTab(nextAiTab(tabs)), [openTab, tabs]);
+  // press a Tab openTab has never seen and so always a new conversation. Asking about a second
+  // selection therefore leaves the first conversation intact, to come back to.
+  const openAiTab = useCallback(
+    (verseContext?: VerseContext) => openTab(nextAiTab(tabs, verseContext)),
+    [openTab, tabs],
+  );
 
   const closeTab = useCallback(
     (id: string) => {

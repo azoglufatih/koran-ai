@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAiClient } from "./ai-client";
 import { aiProviderPreset, type AiProvider, type AiProviderConfig } from "./ai-provider";
+import type { VerseContext } from "./verse-context";
 
 const OLLAMA: AiProviderConfig = {
   provider: "ollama",
@@ -172,6 +173,58 @@ describe("conversation", () => {
     const [system] = requestSentBy(fetchImpl).body.messages;
     expect(system.role).toBe("system");
     expect(system.content).toMatch(/Quran/);
+  });
+});
+
+describe("Verse Context", () => {
+  const ARABIC = "يَٰبَنِىٓ إِسْرَٰٓءِيلَ ٱذْكُرُوا۟ نِعْمَتِىَ";
+  const ENGLISH = "O Children of Israel! Remember My favour";
+
+  // The reader has selected "Children of Israel" in their English Translation Tab.
+  const ASKING_ABOUT_2_40: VerseContext = {
+    ref: { surah: 2, ayah: 40 },
+    arabic: ARABIC,
+    translation: { language: "en", text: ENGLISH },
+    selection: { in: "translation", start: 2, end: 20 },
+  };
+
+  const askAbout = async (verseContext?: VerseContext) => {
+    const fetchImpl = answering("The descendants of the prophet Jacob.");
+    await createAiClient({ fetch: fetchImpl }).ask({
+      config: OLLAMA,
+      messages: [{ role: "user", content: "Who are they?" }],
+      verseContext,
+    });
+    return requestSentBy(fetchImpl).body.messages as { role: string; content: string }[];
+  };
+
+  it("sends the whole Ayah, in both renderings, rather than the words the reader selected", async () => {
+    const sent = (await askAbout(ASKING_ABOUT_2_40)).map((message) => message.content).join("\n");
+
+    expect(sent).toContain(ARABIC);
+    expect(sent).toContain("O ⟦Children of Israel⟧! Remember My favour");
+  });
+
+  it("says which Ayah the question is about", async () => {
+    const sent = (await askAbout(ASKING_ABOUT_2_40)).map((message) => message.content).join("\n");
+
+    expect(sent).toContain("2:40");
+  });
+
+  it("grounds the model before the reader's question, not after it", async () => {
+    const sent = await askAbout(ASKING_ABOUT_2_40);
+
+    const grounding = sent.findIndex((message) => message.content.includes("2:40"));
+    const question = sent.findIndex((message) => message.content === "Who are they?");
+    expect(grounding).toBeGreaterThan(-1);
+    expect(grounding).toBeLessThan(question);
+  });
+
+  it("asks plainly when the reader typed a question without selecting anything", async () => {
+    const sent = await askAbout();
+
+    expect(sent).toHaveLength(2);
+    expect(sent.at(-1)).toEqual({ role: "user", content: "Who are they?" });
   });
 });
 
