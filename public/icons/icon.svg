@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Koran AI">
+  <rect width="512" height="512" rx="112" fill="#1c1a17" />
+  <g fill="none" stroke="#e9c46a" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 150c-34-26-79-38-124-34v246c45-4 90 8 124 34 34-26 79-38 124-34V116c-45-4-90 8-124 34Z" />
+    <path d="M256 150v246" />
+  </g>
+</svg>

@@ -1,0 +1,19 @@
+{
+  "name": "Koran AI",
+  "short_name": "Koran AI",
+  "description": "Read the Quran in Arabic, with translation, tafsir, and grounded AI answers.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf8f1",
+  "theme_color": "#1c1a17",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
+}
