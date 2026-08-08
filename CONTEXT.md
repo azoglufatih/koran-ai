@@ -30,3 +30,9 @@ A Tab holding a chat conversation where the user asks about the meaning of text 
 
 **Verse Context**:
 The grounding data sent to the AI for a question: the full Ayah (Arabic plus the active translation), with the user's selected span marked, rather than the selected fragment alone.
+
+**Bookmark**:
+An Ayah the reader has marked to come back to, deliberately. Kept in the reader's own browser, never on a server.
+
+**Reading Position**:
+The Ayah the reader last had in front of them, kept automatically as they read — one per reader, not per Surah. Distinct from a Bookmark: a Bookmark is chosen, a Reading Position is merely observed.

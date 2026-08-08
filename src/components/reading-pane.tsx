@@ -1,5 +1,6 @@
 import type { Surah } from "@/content/quran";
 import { ayahAnchorId } from "./ayah-anchor";
+import { BookmarkToggle } from "./reading/bookmark-toggle";
 import { arabicAyahMarks } from "./selection/ayah-marks";
 
 export function ReadingPane({ surah }: { surah: Surah }) {
@@ -18,8 +19,11 @@ export function ReadingPane({ surah }: { surah: Surah }) {
             id={ayahAnchorId(ayah.ref.ayah)}
             className="flex gap-4 py-5 target:bg-amber-500/10"
           >
-            <span className="mt-2 w-8 shrink-0 text-xs tabular-nums text-black/35 dark:text-white/35">
-              {surah.summary.number}:{ayah.ref.ayah}
+            <span className="mt-2 flex w-8 shrink-0 flex-col items-center gap-1">
+              <span className="text-xs tabular-nums text-black/35 dark:text-white/35">
+                {surah.summary.number}:{ayah.ref.ayah}
+              </span>
+              <BookmarkToggle ayah={ayah.ref} />
             </span>
             <p
               dir="rtl"

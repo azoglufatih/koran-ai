@@ -23,9 +23,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="text-sm font-semibold tracking-tight">
               Koran AI
             </Link>
-            <Link href="/" className="text-sm text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white">
-              Surahs
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link href="/" className="text-sm text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white">
+                Surahs
+              </Link>
+              <Link
+                href="/bookmarks"
+                className="text-sm text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white"
+              >
+                Bookmarks
+              </Link>
+            </div>
           </nav>
         </header>
 

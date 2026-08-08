@@ -73,6 +73,16 @@ export function ayahTextAround(node: Node | null): AyahText | null {
   return readMarks(element?.closest(`[${ROLE_MARK}][${AYAH_MARK}]`) ?? null);
 }
 
+/**
+ * Every Ayah of the Reading Pane's Arabic on the page, in the order it renders them — the one text
+ * that is always there, which is what makes it the text to measure the reader's place against.
+ */
+export function arabicAyahTexts(root: ParentNode): AyahText[] {
+  return [...root.querySelectorAll(`[${ROLE_MARK}="arabic"][${AYAH_MARK}]`)]
+    .map(readMarks)
+    .filter((found): found is AyahText => found !== null);
+}
+
 const ayahTextSelector = (role: AyahTextRole, ref: AyahRef) =>
   `[${ROLE_MARK}="${role}"][${AYAH_MARK}="${ayahMark(ref)}"]`;
 

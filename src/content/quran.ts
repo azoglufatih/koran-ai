@@ -19,6 +19,9 @@ export interface AyahRef {
   ayah: number;
 }
 
+/** Two refs point at the same Ayah — the same Ayah number in another Surah is a different Ayah. */
+export const sameAyah = (a: AyahRef, b: AyahRef) => a.surah === b.surah && a.ayah === b.ayah;
+
 export interface Ayah {
   ref: AyahRef;
   arabicText: string;

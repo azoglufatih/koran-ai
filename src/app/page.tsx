@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { quranContent } from "@/content/bundled-quran";
+import { ContinueReading } from "@/components/reading/continue-reading";
 
 export default function SurahIndexPage() {
   const surahs = quranContent.listSurahs();
@@ -10,6 +11,8 @@ export default function SurahIndexPage() {
       <p className="mt-1 text-sm text-black/55 dark:text-white/55">
         114 Surahs in Arabic. Pick one to start reading.
       </p>
+
+      <ContinueReading />
 
       <ul className="mt-6 grid gap-2 sm:grid-cols-2">
         {surahs.map((surah) => (
