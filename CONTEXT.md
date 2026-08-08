@@ -31,6 +31,19 @@ A Tab holding a chat conversation where the user asks about the meaning of text 
 **Verse Context**:
 The grounding data sent to the AI for a question: the full Ayah (Arabic plus the active translation), with the user's selected span marked, rather than the selected fragment alone.
 
+**Retrieval Index**:
+A search index over the translations and tafsir, built ahead of time and shipped with the app as static files. Holds the words of the corpus, not its text; the text itself is read back from the corpus when a passage is retrieved.
+_Avoid_: Embeddings (the index is lexical, not vector — see `docs/adr/0003-static-lexical-retrieval-index.md`)
+
+**Shard**:
+The part of the Retrieval Index covering one reader language. A reader asks in one language, so only that shard is ever downloaded or searched.
+
+**Corpus Retriever**:
+The seam the AI Tab's questions reach the corpus through: a question and a language go in, Retrieved Passages come out. The one place that knows retrieval is a search over an index rather than, say, a call to a server.
+
+**Retrieved Passage**:
+One Ayah's translation or tafsir that a reader's question found in the Retrieval Index, sent to the AI alongside the question. Distinct from Verse Context: Verse Context is the Ayah the question is _about_, a Retrieved Passage is somewhere else in the corpus that bears on it.
+
 **Bookmark**:
 An Ayah the reader has marked to come back to, deliberately. Kept in the reader's own browser, never on a server.
 

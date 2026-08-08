@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAiClient } from "./ai-client";
+import type { CorpusRetriever, RetrievedPassage } from "@/retrieval/corpus-retriever";
+import { createAiClient, type ChatMessage } from "./ai-client";
 import { aiProviderPreset, type AiProvider, type AiProviderConfig } from "./ai-provider";
 import type { VerseContext } from "./verse-context";
 
@@ -9,6 +10,13 @@ const OLLAMA: AiProviderConfig = {
   apiKey: "",
   model: "llama3.1",
 };
+
+/** Most of what this client does has nothing to do with the corpus, and says so by retrieving none. */
+const retrievedNothing: CorpusRetriever = { retrieve: async () => [] };
+
+const retrieving = (...passages: RetrievedPassage[]) => ({
+  retrieve: vi.fn(async () => passages),
+});
 
 function answering(content: string) {
   return vi.fn(async () =>
@@ -24,7 +32,7 @@ function requestSentBy(fetchImpl: ReturnType<typeof answering>) {
 describe("ask", () => {
   it("posts an OpenAI-compatible chat request and returns the answer", async () => {
     const fetchImpl = answering("Israelites — the descendants of the prophet Jacob.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     const answer = await client.ask({
       config: OLLAMA,
@@ -58,7 +66,7 @@ describe("provider presets", () => {
   it.for(Object.entries(PRESET_ENDPOINTS))("sends %s questions to %s", async ([provider, endpoint]) => {
     const { baseUrl, suggestedModel } = aiProviderPreset(provider as AiProvider);
     const fetchImpl = answering("An answer.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     await client.ask({
       config: {
@@ -75,7 +83,7 @@ describe("provider presets", () => {
 
   it("sends Custom questions to the Base URL the reader entered", async () => {
     const fetchImpl = answering("An answer.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     await client.ask({
       config: {
@@ -108,7 +116,7 @@ describe("provider presets", () => {
 
 describe("failures the reader has to act on", () => {
   const askOllama = (fetchImpl: typeof globalThis.fetch) =>
-    createAiClient({ fetch: fetchImpl }).ask({
+    createAiClient({ fetch: fetchImpl, retriever: retrievedNothing }).ask({
       config: OLLAMA,
       messages: [{ role: "user", content: "Why?" }],
     });
@@ -145,7 +153,7 @@ describe("failures the reader has to act on", () => {
 describe("conversation", () => {
   it("carries the whole conversation, so a follow-up question keeps what came before", async () => {
     const fetchImpl = answering("Jacob, also called Israel.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     await client.ask({
       config: OLLAMA,
@@ -166,7 +174,7 @@ describe("conversation", () => {
 
   it("opens every conversation by telling the model what it is answering as", async () => {
     const fetchImpl = answering("An answer.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     await client.ask({ config: OLLAMA, messages: [{ role: "user", content: "Why?" }] });
 
@@ -190,7 +198,7 @@ describe("Verse Context", () => {
 
   const askAbout = async (verseContext?: VerseContext) => {
     const fetchImpl = answering("The descendants of the prophet Jacob.");
-    await createAiClient({ fetch: fetchImpl }).ask({
+    await createAiClient({ fetch: fetchImpl, retriever: retrievedNothing }).ask({
       config: OLLAMA,
       messages: [{ role: "user", content: "Who are they?" }],
       verseContext,
@@ -228,10 +236,165 @@ describe("Verse Context", () => {
   });
 });
 
+/**
+ * The corpus the reader is reading, brought to bear on what they asked. Verse Context says which
+ * Ayah the question is about; these say what the rest of the corpus has to say about it.
+ */
+describe("retrieved passages", () => {
+  const SEEK_HELP: RetrievedPassage = {
+    ref: { surah: 2, ayah: 45 },
+    kind: "translation",
+    text: "Seek help in steadfastness and prayer",
+  };
+
+  const ON_STEADFASTNESS: RetrievedPassage = {
+    ref: { surah: 2, ayah: 45 },
+    kind: "tafsir",
+    text: "Steadfastness here is restraint of the self in obedience to Allah",
+  };
+
+  const askWith = async (
+    retriever: CorpusRetriever,
+    request: { messages?: ChatMessage[]; language?: "en" | "tr" | "de"; verseContext?: VerseContext },
+  ) => {
+    const fetchImpl = answering("An answer.");
+    await createAiClient({ fetch: fetchImpl, retriever }).ask({
+      config: OLLAMA,
+      messages: request.messages ?? [{ role: "user", content: "What is steadfastness?" }],
+      language: request.language,
+      verseContext: request.verseContext,
+    });
+    return requestSentBy(fetchImpl).body.messages as { role: string; content: string }[];
+  };
+
+  const allSent = (messages: { content: string }[]) =>
+    messages.map((message) => message.content).join("\n");
+
+  it("sends what was retrieved to the provider, in the corpus's own words", async () => {
+    const sent = allSent(
+      await askWith(retrieving(SEEK_HELP, ON_STEADFASTNESS), { language: "en" }),
+    );
+
+    expect(sent).toContain("Seek help in steadfastness and prayer");
+    expect(sent).toContain("Steadfastness here is restraint of the self in obedience to Allah");
+  });
+
+  it("says which Ayah each passage is, so the model can cite it rather than paraphrase it", async () => {
+    const sent = allSent(await askWith(retrieving(SEEK_HELP), { language: "en" }));
+
+    expect(sent).toContain("2:45");
+  });
+
+  it("searches on what the reader asked", async () => {
+    const retriever = retrieving(SEEK_HELP);
+
+    await askWith(retriever, {
+      messages: [{ role: "user", content: "What is steadfastness?" }],
+      language: "en",
+    });
+
+    expect(retriever.retrieve).toHaveBeenCalledWith(
+      expect.stringContaining("What is steadfastness?"),
+      "en",
+    );
+  });
+
+  it("searches on the words the reader selected as well as what they asked", async () => {
+    const retriever = retrieving(SEEK_HELP);
+
+    await askWith(retriever, {
+      messages: [{ role: "user", content: "What does this mean?" }],
+      language: "en",
+      verseContext: {
+        ref: { surah: 2, ayah: 45 },
+        arabic: "وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ",
+        translation: { language: "en", text: "Seek help in steadfastness and prayer" },
+        selection: { in: "translation", start: 13, end: 26 },
+      },
+    });
+
+    // "What does this mean?" shares no word with the corpus; the selection is the whole question.
+    expect(retriever.retrieve).toHaveBeenCalledWith(expect.stringContaining("steadfastness"), "en");
+  });
+
+  it("searches the last thing asked, not the whole conversation", async () => {
+    const retriever = retrieving(SEEK_HELP);
+
+    await askWith(retriever, {
+      messages: [
+        { role: "user", content: "Who was Thamud?" },
+        { role: "assistant", content: "A people to whom Salih was sent." },
+        { role: "user", content: "What is steadfastness?" },
+      ],
+      language: "en",
+    });
+
+    expect(retriever.retrieve).toHaveBeenCalledWith(expect.not.stringContaining("Thamud"), "en");
+  });
+
+  it("does not search before the reader's language is known", async () => {
+    const retriever = retrieving(SEEK_HELP);
+
+    const sent = await askWith(retriever, { language: undefined });
+
+    // The shard to search is the reader's own language, and a prerendered page has yet to learn it.
+    expect(retriever.retrieve).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(2);
+  });
+
+  it("grounds the model in the passages before the reader's question, not after it", async () => {
+    const sent = await askWith(retrieving(SEEK_HELP), { language: "en" });
+
+    const passages = sent.findIndex((message) => message.content.includes("Seek help"));
+    const question = sent.findIndex((message) => message.content === "What is steadfastness?");
+    expect(passages).toBeGreaterThan(-1);
+    expect(passages).toBeLessThan(question);
+  });
+
+  it("keeps the Ayah the reader asked about nearer the question than passages from elsewhere", async () => {
+    const sent = await askWith(retrieving(SEEK_HELP), {
+      language: "en",
+      verseContext: {
+        ref: { surah: 94, ayah: 5 },
+        arabic: "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
+        translation: { language: "en", text: "But lo! with hardship goeth ease" },
+        selection: { in: "translation", start: 13, end: 21 },
+      },
+    });
+
+    const passages = sent.findIndex((message) => message.content.includes("Seek help"));
+    const verseContext = sent.findIndex((message) => message.content.includes("94:5"));
+    expect(passages).toBeLessThan(verseContext);
+  });
+
+  it("says nothing about passages when the question found none", async () => {
+    const sent = await askWith(retrievedNothing, { language: "en" });
+
+    expect(sent).toHaveLength(2);
+  });
+
+  it("still answers when retrieval fails outright", async () => {
+    const broken: CorpusRetriever = {
+      retrieve: async () => {
+        throw new Error("Failed to fetch");
+      },
+    };
+    const fetchImpl = answering("An answer.");
+
+    const answer = await createAiClient({ fetch: fetchImpl, retriever: broken }).ask({
+      config: OLLAMA,
+      messages: [{ role: "user", content: "What is steadfastness?" }],
+      language: "en",
+    });
+
+    expect(answer).toBe("An answer.");
+  });
+});
+
 describe("authentication", () => {
   it("presents the reader's API key as a bearer token", async () => {
     const fetchImpl = answering("An answer.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     await client.ask({
       config: { ...OLLAMA, provider: "openai", apiKey: "sk-reader-key" },
@@ -245,7 +408,7 @@ describe("authentication", () => {
 
   it("sends no authorization at all to a provider the reader gave no key", async () => {
     const fetchImpl = answering("An answer.");
-    const client = createAiClient({ fetch: fetchImpl });
+    const client = createAiClient({ fetch: fetchImpl, retriever: retrievedNothing });
 
     await client.ask({ config: OLLAMA, messages: [{ role: "user", content: "Why?" }] });
 

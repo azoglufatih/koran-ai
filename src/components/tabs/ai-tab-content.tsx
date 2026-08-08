@@ -7,6 +7,7 @@ import { selectedText, type VerseContext } from "@/ai/verse-context";
 import { ProviderSettings } from "@/components/ai/provider-settings";
 import { useAiProviderConfig } from "@/components/ai/use-ai-provider-config";
 import { RetryNotice } from "./retry-notice";
+import { useTabs } from "./tabs-provider";
 
 /**
  * One AI Tab: a conversation of its own. The turns live in this component's state, so opening a
@@ -18,6 +19,9 @@ import { RetryNotice } from "./retry-notice";
  */
 export function AiTabContent({ verseContext }: { verseContext?: VerseContext }) {
   const { config } = useAiProviderConfig();
+  // Which shard of the corpus the question is retrieved from — the reader's own language, the same
+  // one their Translation Tab opened in.
+  const { readerLanguage } = useTabs();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [isAsking, setIsAsking] = useState(false);
@@ -29,7 +33,12 @@ export function AiTabContent({ verseContext }: { verseContext?: VerseContext }) 
     setIsAsking(true);
     setFailure(null);
     try {
-      const answer = await aiClient.ask({ config, messages: conversation, verseContext });
+      const answer = await aiClient.ask({
+        config,
+        messages: conversation,
+        verseContext,
+        language: readerLanguage ?? undefined,
+      });
       setMessages([...conversation, { role: "assistant", content: answer }]);
     } catch (error) {
       // The reader's own provider is the only thing that can have failed, and only they can fix

@@ -1,4 +1,7 @@
+import type { TranslationLanguage } from "@/content/quran";
+import type { CorpusRetriever, RetrievedPassage } from "@/retrieval/corpus-retriever";
 import type { AiProviderConfig } from "./ai-provider";
+import { retrievalQuestion, retrievedPassagesPrompt } from "./retrieved-passages";
 import { verseContextPrompt, type VerseContext } from "./verse-context";
 
 export interface ChatMessage {
@@ -16,6 +19,13 @@ export interface AiRequest {
    * question worth asking.
    */
   verseContext?: VerseContext;
+  /**
+   * The language the reader reads in, which decides the shard of the corpus their question is
+   * searched against. Absent while the app is prerendering, before the browser has told it the
+   * reader's locale — a question asked then is answered without retrieval rather than against a
+   * language the reader may not read.
+   */
+  language?: TranslationLanguage;
 }
 
 export interface AiClient {
@@ -53,29 +63,37 @@ const chatCompletionsUrl = (baseUrl: string) =>
 
 /**
  * What the model is answering as. Deliberately modest about its own authority: the reader is
- * reading scripture, and a confident-sounding model is worse than an honest one. Verse Context is
- * what it gets to answer *from*; retrieval joins it in a later ticket.
+ * reading scripture, and a confident-sounding model is worse than an honest one. Verse Context and
+ * the retrieved passages are what it gets to answer *from*.
  */
 const SYSTEM_PROMPT = [
   "You help a reader understand the Quran.",
   "Answer plainly and concisely, in the language the reader asks in.",
   "Explain the historical and cultural background a translation alone leaves out.",
   "Where scholars read a passage differently, say so rather than picking one reading.",
+  "Prefer the passages you are given to your own recollection of the text, and say which Ayah an",
+  "explanation rests on.",
   "Say when you do not know. You are a reading aid, not a substitute for scholarship.",
 ].join(" ");
 
 const systemTurn = (content: string): ProviderMessage => ({ role: "system", content });
 
 /**
- * The conversation as the provider receives it: what the model is answering as, then the Ayah the
- * reader selected in, then their turns. The grounding leads so that every question in the Tab —
- * the first and each follow-up — is answered against the Ayah, not just the one that opened it.
+ * The conversation as the provider receives it: what the model is answering as, then what the rest
+ * of the corpus has to say, then the Ayah the reader actually selected in, then their turns.
+ *
+ * The grounding leads so that every question in the Tab — the first and each follow-up — is
+ * answered against it, not just the one that opened the Tab. Verse Context sits nearest the
+ * question because it is the more specific of the two: the passages are a question's surroundings,
+ * the Ayah is its subject.
  */
 const groundedConversation = (
   messages: readonly ChatMessage[],
   verseContext: VerseContext | undefined,
+  passages: readonly RetrievedPassage[],
 ): ProviderMessage[] => [
   systemTurn(SYSTEM_PROMPT),
+  ...(passages.length > 0 ? [systemTurn(retrievedPassagesPrompt(passages))] : []),
   ...(verseContext ? [systemTurn(verseContextPrompt(verseContext))] : []),
   ...messages,
 ];
@@ -85,11 +103,39 @@ const groundedConversation = (
  * the reader configured — only that a question goes in and an answer comes out.
  *
  * `fetch` is injected so the seam can be exercised without a network, and so the browser's fetch
- * stays the only thing that ever sees the reader's API key.
+ * stays the only thing that ever sees the reader's API key. `retriever` is injected for the same
+ * reason: it too is a network read in a browser and none in a test.
  */
-export function createAiClient({ fetch }: { fetch: typeof globalThis.fetch }): AiClient {
+export function createAiClient({
+  fetch,
+  retriever,
+}: {
+  fetch: typeof globalThis.fetch;
+  retriever: CorpusRetriever;
+}): AiClient {
+  /**
+   * The corpus's contribution to an answer, or nothing at all. Retrieval is what makes an answer
+   * better grounded, never what makes one possible, so a reader whose index will not load still
+   * gets their question answered — from the Verse Context and the model's own reading.
+   */
+  async function retrieved({
+    messages,
+    verseContext,
+    language,
+  }: AiRequest): Promise<RetrievedPassage[]> {
+    if (!language) return [];
+
+    try {
+      return await retriever.retrieve(retrievalQuestion(messages, verseContext), language);
+    } catch {
+      return [];
+    }
+  }
+
   return {
-    async ask({ config, messages, verseContext }) {
+    async ask(request) {
+      const { config, messages, verseContext } = request;
+      const passages = await retrieved(request);
       const endpoint = chatCompletionsUrl(config.baseUrl);
       const response = await fetch(endpoint, {
         method: "POST",
@@ -101,7 +147,7 @@ export function createAiClient({ fetch }: { fetch: typeof globalThis.fetch }): A
         },
         body: JSON.stringify({
           model: config.model,
-          messages: groundedConversation(messages, verseContext),
+          messages: groundedConversation(messages, verseContext, passages),
         }),
       }).catch(() => {
         // A browser reports "provider isn't running", "the URL is wrong" and "the provider blocks

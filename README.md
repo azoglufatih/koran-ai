@@ -35,6 +35,7 @@ Then open http://localhost:3000.
 | `npm run vendor:quran` | Regenerate the vendored Arabic corpus (output is committed) |
 | `npm run vendor:translations` | Regenerate the vendored translations (output is committed) |
 | `npm run vendor:tafsir` | Regenerate the vendored tafsir (output is committed) |
+| `npm run build:retrieval-index` | Rebuild the Retrieval Index over the vendored translations and tafsir, after regenerating either (output is committed) |
 
 ## Layout
 
@@ -42,8 +43,10 @@ Then open http://localhost:3000.
   interface every caller reads content through; `data/` is the vendored Arabic corpus.
 - `public/content/translations/`, `public/content/tafsir/` — the vendored translations and
   commentary, fetched when a Tab is opened rather than bundled into the page.
+- `src/retrieval/` — the Corpus Retriever seam. `corpus-retriever.ts` is what the AI Client asks
+  for passages through; `public/content/retrieval/` holds the shards it searches.
 - `src/app/`, `src/components/` — the Reading Pane and Tab UI.
-- `scripts/` — regenerates and validates the vendored content.
+- `scripts/` — regenerates and validates the vendored content, and the index built over it.
 
 ## Licensing
 
