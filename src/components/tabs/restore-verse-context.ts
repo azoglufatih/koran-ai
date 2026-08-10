@@ -27,9 +27,12 @@ export async function restoreVerseContext(grounding: StoredGrounding): Promise<V
   return {
     ref,
     arabic: ayah.arabicText,
-    translation: translation
-      ? { language: translation.edition.language, text: ayahText(translation.ayahs, ref.ayah) }
-      : null,
+    // A reader whose language has no edition selected in a Tab that showed them the gap, so there
+    // is no translation to restore — the grounding carries the Arabic they actually selected in.
+    translation:
+      translation?.available === true
+        ? { language: translation.edition.language, text: ayahText(translation.ayahs, ref.ayah) }
+        : null,
     // Carried only when that is where the reader selected, exactly as when they first asked.
     transliteration:
       transliteration && selection.in === "transliteration"

@@ -95,24 +95,31 @@ describe("retrieving from the shipped corpus", () => {
     expect(await (await freshRetriever()).retrieve("Al-Samad", "en")).toEqual([]);
   });
 
-  it("leaves out commentary in a language the corpus has no tafsir for", async () => {
-    // German has no redistribution-safe tafsir, so its shard can only ever answer with translation.
+  it("drops a passage the corpus no longer supplies, and keeps the rest", async () => {
+    // An index built against commentary the app has since stopped shipping. One passage that will
+    // not load is the others' worth of grounding, not none.
+    files.delete(`/content/tafsir/al-mukhtasar/en/${AL_IKHLAS}.json`);
+
+    const found = await (await freshRetriever()).retrieve("Allah", "en");
+
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.map((passage) => passage.kind)).not.toContain("tafsir");
+  });
+
+  it("grounds in nothing when the reader's language has no translation to read back", async () => {
+    // German is a reader language this repo ships no redistributable translation in, so even a
+    // shard naming its passages has no text behind them.
     files.set(
       "/content/retrieval/de.json",
       buildRetrievalIndex("de", [
-        { ref: { surah: AL_IKHLAS, ayah: 1 }, kind: "translation", text: "Er ist Allah, ein Einziger" },
-        { ref: { surah: AL_IKHLAS, ayah: 2 }, kind: "tafsir", text: "Allah ist der Einzige Einziger" },
+        {
+          ref: { surah: AL_IKHLAS, ayah: 1 },
+          kind: "translation",
+          text: "Er ist Allah, ein Einziger",
+        },
       ]),
     );
-    files.set(`/content/translations/de/${AL_IKHLAS}.json`, [
-      "Er ist Allah, ein Einziger",
-      "Allah, der Absolute",
-      "Er zeugt nicht und ist nicht gezeugt worden",
-      "und ihm ebenbürtig ist keiner",
-    ]);
 
-    const found = await (await freshRetriever()).retrieve("Einziger", "de");
-
-    expect(found.map((passage) => passage.kind)).toEqual(["translation"]);
+    expect(await (await freshRetriever()).retrieve("Einziger", "de")).toEqual([]);
   });
 });

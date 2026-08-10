@@ -11,23 +11,32 @@ import { fileURLToPath } from "node:url";
 
 const API = "https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1";
 
-// The launch languages from the MVP spec. `label` is the endonym, so a reader recognises their
-// own language in the Tab strip; `edition` is the fawazahmed0/quran-api edition it comes from.
+// The editions this repo ships. `edition` is the fawazahmed0/quran-api edition it comes from;
 // `translator` is spelled out here rather than taken from the upstream catalogue, which strips
-// diacritics from names ("Diyanet Isleri") — attribution should carry the name as written.
+// diacritics from names ("Elmalili Hamdi Yazir") — attribution should carry the name as written.
+// The endonym a reader sees lives in src/content/quran.ts, keyed by language, because a language
+// with no edition still needs one.
+//
+// Every edition here must be one this repo may redistribute. Upstream's Unlicense covers its
+// compilation, not the translations inside it, so each translator is checked separately: an
+// edition earns its place by being out of copyright, not by being in the catalogue.
+//
+// That is why German is absent. Every German edition upstream carries is in copyright — Rassoul
+// died in 2015, Khoury in 2023, Zaidan is living, and Bubenheim & Elyas is all rights reserved —
+// and the one German translation that is public domain, Max Henning's of 1901, exists only as
+// scans. A Translation Tab in German says so rather than shipping a text this repo cannot license.
 const EDITIONS = [
   {
     language: "en",
-    label: "English",
+    // Pickthall died in 1936, so this has been public domain since 2007.
     edition: "eng-mohammedmarmadu",
     translator: "Marmaduke Pickthall",
   },
-  { language: "tr", label: "Türkçe", edition: "tur-diyanetisleri", translator: "Diyanet İşleri" },
   {
-    language: "de",
-    label: "Deutsch",
-    edition: "deu-aburidamuhammad",
-    translator: "Abu Rida Muhammad ibn Ahmad ibn Rassoul",
+    language: "tr",
+    // Elmalılı died in 1942, so this has been public domain since 2013.
+    edition: "tur-elmalilihamdiya",
+    translator: "Elmalılı Hamdi Yazır",
   },
 ];
 
@@ -84,7 +93,7 @@ const byName = new Map(Object.values(catalogue).map((entry) => [entry.name, entr
 await rm(outDir, { recursive: true, force: true });
 
 const registry = [];
-for (const { language, label, edition, translator } of EDITIONS) {
+for (const { language, edition, translator } of EDITIONS) {
   if (!byName.has(edition)) throw new Error(`Edition ${edition} is not in the upstream catalogue`);
 
   const { quran } = await fetchJson(`${API}/editions/${edition}.json`);
@@ -95,7 +104,7 @@ for (const { language, label, edition, translator } of EDITIONS) {
     await writeFile(`${outDir}${language}/${number}.json`, `${JSON.stringify(texts)}\n`);
   }
 
-  registry.push({ language, label, translator });
+  registry.push({ language, translator });
   console.log(`${language}: ${edition} by ${translator} — ${bySurah.size} Surahs`);
 }
 

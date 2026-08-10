@@ -1,5 +1,5 @@
 import { TAFSIR_SOURCES, type TafsirSource, type TranslationLanguage } from "@/content/quran";
-import { languageLabel, readerLanguages } from "./reader-languages";
+import { languageLabel, readerLanguages, translatedLanguages } from "./reader-languages";
 import { tafsirLanguages } from "./tafsir-editions";
 import { openableTabId } from "./tabs";
 
@@ -17,9 +17,10 @@ export type Openable =
   | { kind: "ai" };
 
 /**
- * Everything openable, as one flat list: the three translations, the three tafsirs, and AI. Flat is
- * the point — a menu that leads to another menu is what the single `+` replaced, so this is seven
- * items at one click each rather than three buttons over two levels.
+ * Everything openable, as one flat list: a translation and a tafsir in each reader language, and
+ * AI. Flat is the point — a menu that leads to another menu is what the single `+` replaced, so
+ * this is seven items at one click each rather than three buttons over two levels. Languages with
+ * no edition keep their row and say "not yet"; see `hasTranslationEdition`.
  */
 export const OPENABLES: readonly Openable[] = [
   ...readerLanguages.map((language): Openable => ({ kind: "translation", language })),
@@ -47,6 +48,7 @@ export function openableLabel(openable: Openable): string {
 }
 
 const languagesWithTafsir = new Set(tafsirLanguages(TAFSIR_SOURCE));
+const languagesWithTranslation = new Set(translatedLanguages());
 
 /**
  * Whether this tafsir has an edition in this language. A language without one is still offered:
@@ -55,3 +57,11 @@ const languagesWithTafsir = new Set(tafsirLanguages(TAFSIR_SOURCE));
  */
 export const hasTafsirEdition = (language: TranslationLanguage): boolean =>
   languagesWithTafsir.has(language);
+
+/**
+ * Whether a translation has an edition in this language — the same question as `hasTafsirEdition`,
+ * and offered on the same terms. German has none this repo may redistribute, so its row says "not
+ * yet" and the Tab it opens explains why.
+ */
+export const hasTranslationEdition = (language: TranslationLanguage): boolean =>
+  languagesWithTranslation.has(language);

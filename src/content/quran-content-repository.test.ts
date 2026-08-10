@@ -37,22 +37,16 @@ const FIXTURE_TEXT: Record<number, string[]> = {
 
 const ENGLISH: TranslationEdition = {
   language: "en",
-  label: "English",
   translator: "Marmaduke Pickthall",
 };
 
 const TURKISH: TranslationEdition = {
   language: "tr",
-  label: "Türkçe",
-  translator: "Diyanet İşleri",
+  translator: "Elmalılı Hamdi Yazır",
 };
 
-const GERMAN: TranslationEdition = {
-  language: "de",
-  label: "Deutsch",
-  translator: "Abu Rida Muhammad ibn Ahmad ibn Rassoul",
-};
-
+// German is a reader language with no edition, here as in the shipped corpus — it is the case the
+// repository has to report as a gap rather than raise on.
 const FIXTURE_TRANSLATIONS: Record<string, Record<number, string[]>> = {
   en: {
     1: ["In the name of Allah", "Praise be to Allah", "The Beneficent, the Merciful"],
@@ -61,10 +55,6 @@ const FIXTURE_TRANSLATIONS: Record<string, Record<number, string[]>> = {
   tr: {
     1: ["Allah'ın adıyla", "Hamd Allah'a mahsustur", "O, Rahman'dır, Rahim'dir"],
     2: ["Elif Lam Mim", "İşte Kitap"],
-  },
-  de: {
-    1: ["Im Namen Allahs", "Alles Lob gebührt Allah", "Dem Allerbarmer, dem Barmherzigen"],
-    2: ["Alif Lam Mim", "Dies ist das Buch"],
   },
 };
 
@@ -134,7 +124,7 @@ function createRepository() {
   );
   const repository = createQuranContentRepository({
     surahIndex: [AL_FAATIHA, AL_BAQARA],
-    translationEditions: [ENGLISH, TURKISH, GERMAN],
+    translationEditions: [ENGLISH, TURKISH],
     transliterationSchemes: [PHONETIC, TURKISH_LATIN],
     tafsirEditions: [ENGLISH_MUKHTASAR, TURKISH_MUKHTASAR],
     loadSurahText,
@@ -233,12 +223,15 @@ describe("getTranslation", () => {
 
     const translation = await repository.getTranslation(1, "en");
 
-    expect(translation.edition).toEqual(ENGLISH);
-    expect(translation.ayahs).toEqual([
-      { ref: { surah: 1, ayah: 1 }, text: "In the name of Allah" },
-      { ref: { surah: 1, ayah: 2 }, text: "Praise be to Allah" },
-      { ref: { surah: 1, ayah: 3 }, text: "The Beneficent, the Merciful" },
-    ]);
+    expect(translation).toEqual({
+      available: true,
+      edition: ENGLISH,
+      ayahs: [
+        { ref: { surah: 1, ayah: 1 }, text: "In the name of Allah" },
+        { ref: { surah: 1, ayah: 2 }, text: "Praise be to Allah" },
+        { ref: { surah: 1, ayah: 3 }, text: "The Beneficent, the Merciful" },
+      ],
+    });
   });
 
   it("rejects a translation that does not align Ayah-for-Ayah with the Arabic", async () => {
@@ -257,29 +250,37 @@ describe("getTranslation", () => {
     expect(loadTranslationText).not.toHaveBeenCalled();
   });
 
-  it("serves each of the launch languages from its own edition", async () => {
+  it("serves each translated language from its own edition", async () => {
     const { repository } = createRepository();
 
-    const [english, turkish, german] = await Promise.all([
+    const [english, turkish] = await Promise.all([
       repository.getTranslation(2, "en"),
       repository.getTranslation(2, "tr"),
-      repository.getTranslation(2, "de"),
     ]);
 
-    expect(english.edition).toEqual(ENGLISH);
-    expect(english.ayahs[1].text).toBe("This is the Scripture");
-    expect(turkish.edition).toEqual(TURKISH);
-    expect(turkish.ayahs[1].text).toBe("İşte Kitap");
-    expect(german.edition).toEqual(GERMAN);
-    expect(german.ayahs[1].text).toBe("Dies ist das Buch");
+    expect(english).toMatchObject({ edition: ENGLISH });
+    expect(english).toMatchObject({ ayahs: [{}, { text: "This is the Scripture" }] });
+    expect(turkish).toMatchObject({ edition: TURKISH });
+    expect(turkish).toMatchObject({ ayahs: [{}, { text: "İşte Kitap" }] });
   });
 
-  it("rejects a language no edition covers", async () => {
+  it("reports a reader language no edition covers as a gap, without loading any text", async () => {
+    const { repository, loadTranslationText } = createRepository();
+
+    expect(await repository.getTranslation(1, "de")).toEqual({
+      available: false,
+      language: "de",
+    });
+    expect(loadTranslationText).not.toHaveBeenCalled();
+  });
+
+  it("reports a language outside the vocabulary as a gap rather than raising", async () => {
     const { repository } = createRepository();
 
-    await expect(
-      repository.getTranslation(1, "fr" as TranslationLanguage),
-    ).rejects.toThrow('language "fr"');
+    expect(await repository.getTranslation(1, "fr" as TranslationLanguage)).toEqual({
+      available: false,
+      language: "fr",
+    });
   });
 });
 
@@ -430,7 +431,7 @@ describe("listTranslationEditions", () => {
   it("returns every edition a Translation Tab can be opened in", () => {
     const { repository } = createRepository();
 
-    expect(repository.listTranslationEditions()).toEqual([ENGLISH, TURKISH, GERMAN]);
+    expect(repository.listTranslationEditions()).toEqual([ENGLISH, TURKISH]);
   });
 });
 

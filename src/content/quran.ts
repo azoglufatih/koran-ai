@@ -54,7 +54,11 @@ export interface Surah {
   ayahs: Ayah[];
 }
 
-/** The languages a Translation Tab can be opened in. */
+/**
+ * The languages the app can be read in. Not every one has a translation — German has no edition
+ * this repo may redistribute — but a language earns its place here by being one a reader is
+ * offered, so the gap is something they can be told about rather than never see.
+ */
 export const TRANSLATION_LANGUAGES = ["en", "tr", "de"] as const;
 
 export type TranslationLanguage = (typeof TRANSLATION_LANGUAGES)[number];
@@ -63,10 +67,19 @@ export type TranslationLanguage = (typeof TRANSLATION_LANGUAGES)[number];
 export const isTranslationLanguage = (value: unknown): value is TranslationLanguage =>
   TRANSLATION_LANGUAGES.includes(value as TranslationLanguage);
 
+/**
+ * Each language's endonym, so a reader recognises their own language in the Tab strip. Keyed by
+ * language rather than carried on the edition: a language with no edition still has a name, and
+ * that is exactly the language whose name the reader most needs to see.
+ */
+export const LANGUAGE_LABELS: Record<TranslationLanguage, string> = {
+  en: "English",
+  tr: "Türkçe",
+  de: "Deutsch",
+};
+
 export interface TranslationEdition {
   language: TranslationLanguage;
-  /** The language's endonym, so a reader recognises their own language in the Tab strip. */
-  label: string;
   translator: string;
 }
 
@@ -75,10 +88,15 @@ export interface TranslatedAyah {
   text: string;
 }
 
-export interface SurahTranslation {
-  edition: TranslationEdition;
-  ayahs: TranslatedAyah[];
-}
+/**
+ * A Surah's translation, or an explicit statement that this version ships no edition in this
+ * language — a known gap (no German translation has a licence that allows redistribution), not an
+ * error the reader should see as a failure. Shaped like `SurahTafsir` because it is the same
+ * situation: a reader language the corpus does not reach into.
+ */
+export type SurahTranslation =
+  | { available: true; edition: TranslationEdition; ayahs: TranslatedAyah[] }
+  | { available: false; language: TranslationLanguage };
 
 /**
  * The Latin-script schemes an Ayah's Transliteration can be read in. The first is the default for

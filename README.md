@@ -11,8 +11,8 @@ configuration lives only in the reader's own browser
 
 Early. Currently implemented: the Arabic Reading Pane — the full Quran in Arabic, navigable by
 Surah and Ayah, with a Latin-script transliteration under every Ayah in one of three schemes —
-beside a row of Columns the reader arranges, each holding Translation Tabs (English, Turkish,
-German), Tafsir Tabs (Al-Mukhtasar, in English and Turkish) and AI Tabs. AI Tabs answer questions
+beside a row of Columns the reader arranges, each holding Translation Tabs (English and Turkish),
+Tafsir Tabs (Al-Mukhtasar, in English and Turkish) and AI Tabs. AI Tabs answer questions
 about a selected Ayah through a provider the reader configures, grounded in passages retrieved
 from the corpus. The Column arrangement, the transliteration preference and the reading position
 are kept in the reader's own browser, and the app installs to a home screen.

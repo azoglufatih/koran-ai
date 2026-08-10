@@ -153,7 +153,9 @@ export function createQuranContentRepository({
     async getTranslation(surahNumber, language) {
       const summary = requireSummary(surahNumber);
       const edition = editions.get(language);
-      if (!edition) throw new RangeError(`No translation edition for language "${language}"`);
+      // A language this version ships no edition in is a known gap, not a failure — callers get
+      // something they can render as such rather than an exception to catch, exactly as for tafsir.
+      if (!edition) return { available: false, language };
 
       const text = await loadTranslationText(surahNumber, language);
       // Verse Context pairs Arabic and translation by Ayah number, so a drifting edition is a
@@ -165,6 +167,7 @@ export function createQuranContentRepository({
       }
 
       return {
+        available: true,
         edition,
         ayahs: text.map((translatedText, index) => ({
           ref: { surah: surahNumber, ayah: index + 1 },

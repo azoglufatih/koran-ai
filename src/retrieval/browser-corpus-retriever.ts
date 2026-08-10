@@ -40,8 +40,11 @@ export const corpusRetriever = createCorpusRetriever({
   loadIndex,
   async readPassage(passage, language) {
     if (passage.kind === "translation") {
-      const { ayahs } = await quranContent.getTranslation(passage.ref.surah, language);
-      return ayahText(ayahs, passage);
+      const translation = await quranContent.getTranslation(passage.ref.surah, language);
+      if (!translation.available) {
+        throw new RangeError(`No translation in ${language} to retrieve from`);
+      }
+      return ayahText(translation.ayahs, passage);
     }
 
     const tafsir = await quranContent.getTafsir(passage.ref.surah, ONLY_TAFSIR_SOURCE, language);

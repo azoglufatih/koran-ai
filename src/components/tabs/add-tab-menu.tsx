@@ -2,7 +2,14 @@
 
 import { useTabs } from "./tabs-provider";
 import { openableTabId } from "./tabs";
-import { hasTafsirEdition, OPENABLES, openableKey, openableLabel, type Openable } from "./openables";
+import {
+  hasTafsirEdition,
+  hasTranslationEdition,
+  OPENABLES,
+  openableKey,
+  openableLabel,
+  type Openable,
+} from "./openables";
 import { MenuOption, WorkspaceMenu } from "./workspace-menu";
 
 /**
@@ -30,12 +37,15 @@ export function AddTabMenu({
     return id !== null && tabs.some((tab) => tab.id === id);
   };
 
-  // Two things a row can say about itself: the reader already has it open, or the corpus has no
+  // Two things a row can say about itself: the reader already has it open, or this repo ships no
   // edition of it in that language yet. AI is neither — every choice of it is a new conversation,
   // so it is never "open".
   const hint = (openable: Openable) => {
     if (isOpen(openable)) return "open";
     if (openable.kind === "tafsir" && !hasTafsirEdition(openable.language)) return "not yet";
+    if (openable.kind === "translation" && !hasTranslationEdition(openable.language)) {
+      return "not yet";
+    }
     return undefined;
   };
 
