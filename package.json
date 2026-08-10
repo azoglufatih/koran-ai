@@ -15,7 +15,8 @@
     "vendor:quran": "node scripts/vendor-quran-data.mjs",
     "vendor:translations": "node scripts/vendor-translations.mjs",
     "vendor:tafsir": "node scripts/vendor-tafsir.mjs",
-    "build:retrieval-index": "node scripts/build-retrieval-index.mjs"
+    "build:retrieval-index": "node scripts/build-retrieval-index.mjs",
+    "icons:generate": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "next": "^16.3.0",

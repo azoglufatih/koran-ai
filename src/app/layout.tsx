@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { RegisterServiceWorker } from "@/components/pwa/register-service-worker";
 import { TabsProvider } from "@/components/tabs/tabs-provider";
 import "./globals.css";
 
@@ -8,6 +9,15 @@ export const metadata: Metadata = {
   description: "Read the Quran in Arabic, with translation, tafsir, and grounded AI answers.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Koran AI", statusBarStyle: "default" },
+  // The manifest names these too; a browser reads them from here before it has read the manifest,
+  // and iOS only ever reads the apple one.
+  icons: {
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -18,6 +28,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body className="flex min-h-dvh flex-col antialiased">
+        <RegisterServiceWorker />
+
         <header className="bg-parchment/85 dark:bg-night/85 sticky top-0 z-10 border-b border-black/10 backdrop-blur dark:border-white/10">
           <nav className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
             <Link href="/" className="text-sm font-semibold tracking-tight">

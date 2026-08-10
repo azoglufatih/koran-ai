@@ -11,8 +11,10 @@ configuration lives only in the reader's own browser
 
 Early. Currently implemented: the Arabic Reading Pane — the full Quran in Arabic, navigable by
 Surah and Ayah — plus Translation Tabs in English, Turkish, and German and Tafsir Tabs
-(Al-Mukhtasar, in English and Turkish), opened alongside it. The AI Tab is tracked as an open
-issue.
+(Al-Mukhtasar, in English and Turkish), opened alongside it. AI Tabs answer questions about a
+selected Ayah through a provider the reader configures, grounded in passages retrieved from the
+corpus. Bookmarks and reading position are kept in the reader's own browser, and the app installs
+to a home screen.
 
 ## Getting started
 
@@ -36,6 +38,7 @@ Then open http://localhost:3000.
 | `npm run vendor:translations` | Regenerate the vendored translations (output is committed) |
 | `npm run vendor:tafsir` | Regenerate the vendored tafsir (output is committed) |
 | `npm run build:retrieval-index` | Rebuild the Retrieval Index over the vendored translations and tafsir, after regenerating either (output is committed) |
+| `npm run icons:generate` | Re-render the PNG app icons from the SVGs under `public/icons/` (output is committed; needs `rsvg-convert`, or macOS `sips`) |
 
 ## Layout
 
@@ -46,6 +49,9 @@ Then open http://localhost:3000.
 - `src/retrieval/` — the Corpus Retriever seam. `corpus-retriever.ts` is what the AI Client asks
   for passages through; `public/content/retrieval/` holds the shards it searches.
 - `src/app/`, `src/components/` — the Reading Pane and Tab UI.
+- `public/sw.js`, `public/pwa/` — the service worker that caches the App Shell, and the policy
+  saying what it may keep. Served from the root because that is the only place a service worker is
+  allowed to control the whole app; tested from `src/pwa/`.
 - `scripts/` — regenerates and validates the vendored content, and the index built over it.
 
 ## Licensing

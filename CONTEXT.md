@@ -44,6 +44,9 @@ The seam the AI Tab's questions reach the corpus through: a question and a langu
 **Retrieved Passage**:
 One Ayah's translation or tafsir that a reader's question found in the Retrieval Index, sent to the AI alongside the question. Distinct from Verse Context: Verse Context is the Ayah the question is _about_, a Retrieved Passage is somewhere else in the corpus that bears on it.
 
+**App Shell**:
+The app's own code and assets — the HTML, JavaScript, CSS and icons a build produces — as against the corpus it fetches. The service worker keeps the App Shell in the reader's browser so opening the app again is fast; the translations, tafsir and Retrieval Index are read over the network every time. The Arabic is bundled rather than fetched, so it is part of the App Shell (see `docs/adr/0004-app-shell-cached-corpus-not.md`).
+
 **Bookmark**:
 An Ayah the reader has marked to come back to, deliberately. Kept in the reader's own browser, never on a server.
 
