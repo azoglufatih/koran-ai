@@ -22,6 +22,28 @@ export interface AyahRef {
 /** Two refs point at the same Ayah — the same Ayah number in another Surah is a different Ayah. */
 export const sameAyah = (a: AyahRef, b: AyahRef) => a.surah === b.surah && a.ayah === b.ayah;
 
+/** The Quran's fixed extent — the one bound worth checking without loading any Surah to check it. */
+const SURAH_COUNT = 114;
+
+/**
+ * An Ayah reference read back out of something untrusted — the reader's own browser storage, or
+ * their own edit of it. A ref that isn't somewhere in the Quran would send them to a Surah that
+ * does not exist, so it is treated as no ref at all.
+ *
+ * Whether the Ayah exists *within* its Surah is deliberately not checked: that needs the corpus,
+ * and the storage seams that call this stay independent of it. A ref past the end of a real Surah
+ * survives to whatever resolves it against the content repository.
+ */
+export function parseAyahRef(value: unknown): AyahRef | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { surah, ayah } = value as Record<string, unknown>;
+
+  if (!Number.isInteger(surah) || !Number.isInteger(ayah)) return null;
+  if ((surah as number) < 1 || (surah as number) > SURAH_COUNT || (ayah as number) < 1) return null;
+
+  return { surah: surah as number, ayah: ayah as number };
+}
+
 export interface Ayah {
   ref: AyahRef;
   arabicText: string;
@@ -36,6 +58,10 @@ export interface Surah {
 export const TRANSLATION_LANGUAGES = ["en", "tr", "de"] as const;
 
 export type TranslationLanguage = (typeof TRANSLATION_LANGUAGES)[number];
+
+/** Whether a value read back out of storage names a language this version still ships. */
+export const isTranslationLanguage = (value: unknown): value is TranslationLanguage =>
+  TRANSLATION_LANGUAGES.includes(value as TranslationLanguage);
 
 export interface TranslationEdition {
   language: TranslationLanguage;
@@ -52,6 +78,46 @@ export interface TranslatedAyah {
 export interface SurahTranslation {
   edition: TranslationEdition;
   ayahs: TranslatedAyah[];
+}
+
+/**
+ * The Latin-script schemes an Ayah's Transliteration can be read in. The first is the default for
+ * every reader: unlike a translation, this is not detected from their browser's languages — a
+ * Turkish reader who wants Turkish orthography picks it themselves.
+ */
+export const TRANSLITERATION_SCHEMES = [
+  "ara-quranphoneticst",
+  "ara-quran-la1",
+  "tur-latinalphabet",
+] as const;
+
+export type TransliterationScheme = (typeof TRANSLITERATION_SCHEMES)[number];
+
+export const [DEFAULT_TRANSLITERATION_SCHEME] = TRANSLITERATION_SCHEMES;
+
+/** Whether a value read back out of storage names a scheme this version still ships. */
+export const isTransliterationScheme = (value: unknown): value is TransliterationScheme =>
+  TRANSLITERATION_SCHEMES.includes(value as TransliterationScheme);
+
+export interface TransliterationSchemeInfo {
+  scheme: TransliterationScheme;
+  /** How the picker names the scheme. */
+  label: string;
+  /**
+   * Ayah 1:2 in this scheme. What separates the schemes is how they spell rather than what they
+   * say, so showing a line of one is the only honest way to offer a reader the choice.
+   */
+  sample: string;
+}
+
+export interface TransliteratedAyah {
+  ref: AyahRef;
+  text: string;
+}
+
+export interface SurahTransliteration {
+  scheme: TransliterationScheme;
+  ayahs: TransliteratedAyah[];
 }
 
 /** The tafsirs a Tafsir Tab can be opened in. Al-Mukhtasar is the only one so far. */

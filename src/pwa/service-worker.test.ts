@@ -142,9 +142,9 @@ describe("the App Shell cache", () => {
   });
 
   it("waits on the network for a page the reader has not opened before", async () => {
-    const response = await requestThrough(`${SCOPE}bookmarks`);
+    const response = await requestThrough(`${SCOPE}surah/36`);
 
-    expect(response?.body).toBe(`from the network: ${SCOPE}bookmarks`);
+    expect(response?.body).toBe(`from the network: ${SCOPE}surah/36`);
   });
 
   it("keeps nothing it could not fetch", async () => {

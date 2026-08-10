@@ -1,0 +1,17 @@
+[
+  {
+    "scheme": "ara-quranphoneticst",
+    "label": "Phonetic",
+    "sample": "Al-Ĥamdu Lillāhi Rabbi Al-`Ālamīna"
+  },
+  {
+    "scheme": "ara-quran-la1",
+    "label": "Simple",
+    "sample": "Alhamdu lillaahi Rabbil 'aalameen"
+  },
+  {
+    "scheme": "tur-latinalphabet",
+    "label": "Türkçe",
+    "sample": "El hamdü lillahi rabbil alemin"
+  }
+]

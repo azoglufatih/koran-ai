@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { ForgetBookmarks } from "@/components/reading/forget-bookmarks";
 import { RegisterServiceWorker } from "@/components/pwa/register-service-worker";
 import { TabsProvider } from "@/components/tabs/tabs-provider";
 import "./globals.css";
@@ -29,23 +30,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-scroll-behavior="smooth">
       <body className="flex min-h-dvh flex-col antialiased">
         <RegisterServiceWorker />
+        <ForgetBookmarks />
 
         <header className="bg-parchment/85 dark:bg-night/85 sticky top-0 z-10 border-b border-black/10 backdrop-blur dark:border-white/10">
           <nav className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
             <Link href="/" className="text-sm font-semibold tracking-tight">
               Koran AI
             </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/" className="text-sm text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white">
-                Surahs
-              </Link>
-              <Link
-                href="/bookmarks"
-                className="text-sm text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white"
-              >
-                Bookmarks
-              </Link>
-            </div>
+            <Link href="/" className="text-sm text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white">
+              Surahs
+            </Link>
           </nav>
         </header>
 

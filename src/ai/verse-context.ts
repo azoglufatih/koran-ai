@@ -1,7 +1,12 @@
-import type { AyahRef, TranslationLanguage } from "@/content/quran";
+import type { AyahRef, TranslationLanguage, TransliterationScheme } from "@/content/quran";
 
-/** The two texts a reader can select in: the Reading Pane's Arabic, or a Translation Tab. */
-export type AyahTextRole = "arabic" | "translation";
+/**
+ * The three texts a reader can select in: the Reading Pane's Arabic, the Transliteration beneath
+ * it, or a Translation Tab.
+ */
+export const AYAH_TEXT_ROLES = ["arabic", "translation", "transliteration"] as const;
+
+export type AyahTextRole = (typeof AYAH_TEXT_ROLES)[number];
 
 /** Where in one of those texts the reader's selection starts and ends. */
 export interface AyahSelection {
@@ -25,6 +30,16 @@ export interface VerseContext {
    * they can select words in.
    */
   translation: { language: TranslationLanguage; text: string } | null;
+  /**
+   * The Ayah's Latin-script Transliteration — carried only when that is where the reader selected,
+   * and null otherwise. It renders the Arabic's sound rather than its meaning, so it adds nothing
+   * to a question asked about either of the other two texts (ADR 0005).
+   *
+   * The scheme is named for the same reason the translation's language is: the reader can switch
+   * between three of them, and the selection's offsets only mean anything in the one they were
+   * taken in.
+   */
+  transliteration: { scheme: TransliterationScheme; text: string } | null;
   selection: AyahSelection;
 }
 
@@ -45,8 +60,16 @@ const LANGUAGE_NAMES: Record<TranslationLanguage, string> = {
   de: "German",
 };
 
-const ayahText = (context: VerseContext, role: AyahTextRole) =>
-  role === "arabic" ? context.arabic : (context.translation?.text ?? "");
+function ayahText(context: VerseContext, role: AyahTextRole): string {
+  switch (role) {
+    case "arabic":
+      return context.arabic;
+    case "translation":
+      return context.translation?.text ?? "";
+    case "transliteration":
+      return context.transliteration?.text ?? "";
+  }
+}
 
 /** The words the reader actually selected — for showing them back what they asked about. */
 export function selectedText(context: VerseContext): string {
@@ -74,6 +97,19 @@ export function verseContextPrompt(context: VerseContext): string {
       `${MARK_OPEN}like this${MARK_CLOSE} — answer about those, reading the whole Ayah below as their context.`,
     `Arabic:\n${marked(context, "arabic")}`,
   ];
+
+  // Only ever present when the reader selected in it, and then it is the only text with marks in
+  // it. Nothing here can line the two scripts up — the vendored Transliteration carries no
+  // word-level alignment — so the model is asked to do it, which is the trade-off ADR 0005 accepts
+  // for the one case where refusing would leave the reader unable to ask at all.
+  if (context.transliteration) {
+    sections.push(
+      `Latin-script transliteration of that Arabic, which is where the reader selected:\n` +
+        `${marked(context, "transliteration")}\n\n` +
+        `The marks are on the transliteration, so work out for yourself which Arabic words they ` +
+        `spell, and answer about those.`,
+    );
+  }
 
   if (context.translation) {
     const language = LANGUAGE_NAMES[context.translation.language];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { selectedText, type VerseContext } from "@/ai/verse-context";
 import { useTabs } from "@/components/tabs/tabs-provider";
 import { captureVerseContext } from "./capture-verse-context";
@@ -34,6 +34,7 @@ function askingAboutSelection(): Asking | null {
 export function AskAboutSelection() {
   const { openAiTab } = useTabs();
   const [asking, setAsking] = useState<Asking | null>(null);
+  const action = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     // Hidden while the selection is still moving, and offered once the reader settles on it —
@@ -44,7 +45,12 @@ export function AskAboutSelection() {
 
     const hide = () => setAsking(null);
     const refresh = () => setAsking(choosing ? null : askingAboutSelection());
-    const press = () => {
+    const press = (event: PointerEvent) => {
+      // A press on the action itself is the reader taking it, not starting a new selection —
+      // hiding here would unmount the button before the click it was pressed for ever landed.
+      // Checked here rather than stopped at the button, because this listener and React's own sit
+      // on the same node, where stopping propagation cannot get between them.
+      if (action.current?.contains(event.target as Node)) return;
       choosing = true;
       hide();
     };
@@ -78,14 +84,13 @@ export function AskAboutSelection() {
 
   return (
     <button
+      ref={action}
       type="button"
-      // Taking the press stops the browser collapsing the selection under it, and keeps it from
-      // reaching the listener above as the reader starting a new one — either would unmount this
-      // button before the click it was pressed for ever lands.
-      onPointerDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
+      // Stops the browser collapsing the selection under the press — and it has to be the mouse
+      // event rather than the pointer one. Cancelling `pointerdown` suppresses the whole
+      // compatibility sequence behind it, `click` included, so the button would swallow its own
+      // press and open nothing.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={() => {
         openAiTab(asking.context);
         document.getSelection()?.removeAllRanges();

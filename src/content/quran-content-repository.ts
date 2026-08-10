@@ -5,10 +5,13 @@ import type {
   SurahSummary,
   SurahTafsir,
   SurahTranslation,
+  SurahTransliteration,
   TafsirEdition,
   TafsirSource,
   TranslationEdition,
   TranslationLanguage,
+  TransliterationScheme,
+  TransliterationSchemeInfo,
 } from "./quran";
 
 export type SurahTextLoader = (surahNumber: number) => Promise<readonly string[]>;
@@ -16,6 +19,11 @@ export type SurahTextLoader = (surahNumber: number) => Promise<readonly string[]
 export type TranslationTextLoader = (
   surahNumber: number,
   language: TranslationLanguage,
+) => Promise<readonly string[]>;
+
+export type TransliterationTextLoader = (
+  surahNumber: number,
+  scheme: TransliterationScheme,
 ) => Promise<readonly string[]>;
 
 export type TafsirTextLoader = (
@@ -31,6 +39,16 @@ export interface QuranContentRepository {
   getAyah(ref: AyahRef): Promise<Ayah>;
   listTranslationEditions(): TranslationEdition[];
   getTranslation(surahNumber: number, language: TranslationLanguage): Promise<SurahTranslation>;
+  listTransliterationSchemes(): TransliterationSchemeInfo[];
+  getTransliteration(
+    surahNumber: number,
+    scheme: TransliterationScheme,
+  ): Promise<SurahTransliteration>;
+  /**
+   * The opening basmala in Latin script — for the 112 Surahs whose basmala sits above their
+   * numbered Ayahs, and so outside the 6236 the corpus covers.
+   */
+  getTransliteratedBasmala(scheme: TransliterationScheme): Promise<string>;
   /** Only the editions that exist — a language absent here has no tafsir in this corpus. */
   listTafsirEditions(): TafsirEdition[];
   getTafsir(
@@ -43,11 +61,20 @@ export interface QuranContentRepository {
 export interface QuranContentSources {
   surahIndex: readonly SurahSummary[];
   translationEditions: readonly TranslationEdition[];
+  transliterationSchemes: readonly TransliterationSchemeInfo[];
   tafsirEditions: readonly TafsirEdition[];
   loadSurahText: SurahTextLoader;
   loadTranslationText: TranslationTextLoader;
+  loadTransliterationText: TransliterationTextLoader;
   loadTafsirText: TafsirTextLoader;
 }
+
+/**
+ * Where the basmala the 112 Surahs open with is read from. It sits outside their numbered Ayahs, so
+ * the corpus — 6236 numbered Ayahs and nothing else — has no entry for it; Al-Faatiha's Ayah 1 is
+ * that same text, which is what every rendering of it here comes from (ADR 0005).
+ */
+const BASMALA: AyahRef = { surah: 1, ayah: 1 };
 
 const tafsirEditionKey = (source: TafsirSource, language: TranslationLanguage) =>
   `${source}:${language}`;
@@ -55,9 +82,11 @@ const tafsirEditionKey = (source: TafsirSource, language: TranslationLanguage) =
 export function createQuranContentRepository({
   surahIndex,
   translationEditions,
+  transliterationSchemes,
   tafsirEditions,
   loadSurahText,
   loadTranslationText,
+  loadTransliterationText,
   loadTafsirText,
 }: QuranContentSources): QuranContentRepository {
   const summaries = new Map(surahIndex.map((summary) => [summary.number, summary]));
@@ -82,6 +111,30 @@ export function createQuranContentRepository({
       ayahs: text.map((arabicText, index) => ({
         ref: { surah: surahNumber, ayah: index + 1 },
         arabicText,
+      })),
+    };
+  }
+
+  async function getTransliteration(
+    surahNumber: number,
+    scheme: TransliterationScheme,
+  ): Promise<SurahTransliteration> {
+    const summary = requireSummary(surahNumber);
+    const text = await loadTransliterationText(surahNumber, scheme);
+    // A Transliteration is shown beneath the Ayah it spells, so an edition that skipped one would
+    // put every line after it under the wrong Arabic — the same correctness bug a drifting
+    // translation is, and refused the same way rather than rendered.
+    if (text.length !== summary.ayahCount) {
+      throw new RangeError(
+        `Surah ${surahNumber}: expected ${summary.ayahCount} transliterated Ayahs, got ${text.length}`,
+      );
+    }
+
+    return {
+      scheme,
+      ayahs: text.map((transliterated, index) => ({
+        ref: { surah: surahNumber, ayah: index + 1 },
+        text: transliterated,
       })),
     };
   }
@@ -118,6 +171,14 @@ export function createQuranContentRepository({
           text: translatedText,
         })),
       };
+    },
+    listTransliterationSchemes: () => [...transliterationSchemes],
+    getTransliteration,
+    async getTransliteratedBasmala(scheme) {
+      const { ayahs } = await getTransliteration(BASMALA.surah, scheme);
+      const basmala = ayahs[BASMALA.ayah - 1];
+      if (!basmala) throw new RangeError(`No transliterated basmala in "${scheme}"`);
+      return basmala.text;
     },
     listTafsirEditions: () => [...tafsirEditions],
     async getTafsir(surahNumber, source, language) {

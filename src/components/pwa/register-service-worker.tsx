@@ -27,7 +27,7 @@ export function RegisterServiceWorker() {
     navigator.serviceWorker
       .register("/sw.js", { type: "module", scope: "/", updateViaCache: "none" })
       .catch(() => {
-        // Nothing to tell the reader: they can read, ask and bookmark without a worker.
+        // Nothing to tell the reader: they can read and ask without a worker.
       });
   }, []);
 

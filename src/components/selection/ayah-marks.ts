@@ -1,5 +1,11 @@
-import type { AyahTextRole } from "@/ai/verse-context";
-import { TRANSLATION_LANGUAGES, type AyahRef, type TranslationLanguage } from "@/content/quran";
+import { AYAH_TEXT_ROLES, type AyahTextRole } from "@/ai/verse-context";
+import {
+  isTranslationLanguage,
+  isTransliterationScheme,
+  type AyahRef,
+  type TranslationLanguage,
+  type TransliterationScheme,
+} from "@/content/quran";
 
 /**
  * What a reader selects is a range of text nodes; what they mean is "these words, in this Ayah".
@@ -13,6 +19,7 @@ import { TRANSLATION_LANGUAGES, type AyahRef, type TranslationLanguage } from "@
 const ROLE_MARK = "data-ayah-role";
 const AYAH_MARK = "data-ayah";
 const LANGUAGE_MARK = "data-ayah-language";
+const SCHEME_MARK = "data-ayah-scheme";
 
 /** The Tab the reader is looking at, of the several that can be on screen at once. */
 const ACTIVE_TAB_MARK = "data-tab-active";
@@ -36,6 +43,18 @@ export const translationAyahMarks = (ref: AyahRef, language: TranslationLanguage
   [LANGUAGE_MARK]: language,
 });
 
+/**
+ * Marks for the Latin line beneath an Ayah. A Transliteration names its scheme where a translation
+ * names its language: the reader can switch between three of them, and offsets counted in one
+ * scheme's spelling mean nothing in another's — which is what a restored conversation needs to
+ * read the same words back out of the corpus.
+ */
+export const transliterationAyahMarks = (ref: AyahRef, scheme: TransliterationScheme) => ({
+  [ROLE_MARK]: "transliteration",
+  [AYAH_MARK]: ayahMark(ref),
+  [SCHEME_MARK]: scheme,
+});
+
 /** Marks the Tab the reader is on, so a selection knows which translation they can see. */
 export const activeTabMarks = (isActive: boolean) => (isActive ? { [ACTIVE_TAB_MARK]: "" } : {});
 
@@ -44,27 +63,40 @@ export interface AyahText {
   element: Element;
   role: AyahTextRole;
   ref: AyahRef;
-  /** The translation's language; null for the Arabic, which has no edition to name. */
+  /** The translation's language; null for the other two, neither of which names one. */
   language: TranslationLanguage | null;
+  /** The Transliteration's scheme; null for the other two, neither of which names one. */
+  scheme: TransliterationScheme | null;
   text: string;
 }
 
+const isRole = (value: string | null): value is AyahTextRole =>
+  AYAH_TEXT_ROLES.includes(value as AyahTextRole);
+
 function readLanguage(element: Element): TranslationLanguage | null {
   const mark = element.getAttribute(LANGUAGE_MARK);
-  return TRANSLATION_LANGUAGES.find((language) => language === mark) ?? null;
+  return isTranslationLanguage(mark) ? mark : null;
+}
+
+function readScheme(element: Element): TransliterationScheme | null {
+  const mark = element.getAttribute(SCHEME_MARK);
+  return isTransliterationScheme(mark) ? mark : null;
 }
 
 function readMarks(element: Element | null): AyahText | null {
-  const role = element?.getAttribute(ROLE_MARK);
+  const role = element?.getAttribute(ROLE_MARK) ?? null;
   const ref = element && parseAyahMark(element.getAttribute(AYAH_MARK));
-  if (!element || !ref || (role !== "arabic" && role !== "translation")) return null;
+  if (!element || !ref || !isRole(role)) return null;
 
-  // A translation whose language cannot be read is no translation as far as grounding goes: it
-  // could neither be named to the model nor honestly marked, so it is not Ayah text to ask about.
+  // A text whose edition cannot be read is no text as far as grounding goes: it could neither be
+  // named to the model nor read back out of the corpus, so it is not Ayah text to ask about. The
+  // Arabic names no edition and needs none — there is one of it.
   const language = readLanguage(element);
+  const scheme = readScheme(element);
   if (role === "translation" && !language) return null;
+  if (role === "transliteration" && !scheme) return null;
 
-  return { element, role, ref, language, text: element.textContent ?? "" };
+  return { element, role, ref, language, scheme, text: element.textContent ?? "" };
 }
 
 /** The Ayah text a node sits inside, or null for a node outside any — a heading, a Tab strip. */

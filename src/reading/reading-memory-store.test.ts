@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AyahRef } from "@/content/quran";
 import {
-  BOOKMARKS_KEY,
   READING_POSITION_KEY,
-  isBookmarked,
-  readBookmarks,
+  forgetBookmarks,
   readReadingPosition,
-  toggleBookmark,
   writeReadingPosition,
 } from "./reading-memory-store";
+
+/** What the removed Bookmarks feature wrote, as a browser that used it still holds it. */
+const REMOVED_BOOKMARKS_KEY = "koran-ai:bookmarks";
 
 const ayah = (surah: number, ayah: number): AyahRef => ({ surah, ayah });
 
@@ -74,78 +74,24 @@ describe("readReadingPosition", () => {
   });
 });
 
-describe("toggleBookmark", () => {
-  it("bookmarks an Ayah the reader had not bookmarked", () => {
-    toggleBookmark(storage, ayah(36, 1));
+describe("forgetBookmarks", () => {
+  it("deletes the list a reader of the shipped version still has in their browser", () => {
+    storage.setItem(REMOVED_BOOKMARKS_KEY, JSON.stringify([ayah(2, 30), ayah(36, 1)]));
 
-    expect(readBookmarks(storage)).toEqual([ayah(36, 1)]);
+    forgetBookmarks(storage);
+
+    expect(storage.getItem(REMOVED_BOOKMARKS_KEY)).toBeNull();
   });
 
-  it("removes a bookmark the reader already had", () => {
-    toggleBookmark(storage, ayah(36, 1));
-    toggleBookmark(storage, ayah(36, 1));
+  it("leaves the reading position, which is a separate thing and is staying", () => {
+    writeReadingPosition(storage, ayah(18, 60));
 
-    expect(readBookmarks(storage)).toEqual([]);
-  });
+    forgetBookmarks(storage);
 
-  it("leaves the reader's other bookmarks alone", () => {
-    toggleBookmark(storage, ayah(2, 255));
-    toggleBookmark(storage, ayah(36, 1));
-
-    toggleBookmark(storage, ayah(2, 255));
-
-    expect(readBookmarks(storage)).toEqual([ayah(36, 1)]);
-  });
-
-  it("keeps bookmarks in the order they are read in, not the order they were made", () => {
-    toggleBookmark(storage, ayah(36, 1));
-    toggleBookmark(storage, ayah(2, 255));
-    toggleBookmark(storage, ayah(2, 30));
-
-    expect(readBookmarks(storage)).toEqual([ayah(2, 30), ayah(2, 255), ayah(36, 1)]);
+    expect(readReadingPosition(storage)).toEqual(ayah(18, 60));
   });
 
   it("does nothing when the browser denies storage entirely", () => {
-    toggleBookmark(null, ayah(1, 1));
-
-    expect(readBookmarks(null)).toEqual([]);
-  });
-});
-
-describe("readBookmarks", () => {
-  it("returns nothing before the reader has bookmarked anything", () => {
-    expect(readBookmarks(storage)).toEqual([]);
-  });
-
-  // One rotted entry shouldn't cost a reader the rest of the list they built up.
-  it("keeps the bookmarks it can read and drops the ones it cannot", () => {
-    storage.setItem(
-      BOOKMARKS_KEY,
-      JSON.stringify([ayah(2, 30), { surah: 999, ayah: 1 }, "2:255", null, ayah(36, 1)]),
-    );
-
-    expect(readBookmarks(storage)).toEqual([ayah(2, 30), ayah(36, 1)]);
-  });
-
-  it("returns nothing for a stored entry that is not a list of bookmarks", () => {
-    for (const stored of ["not json at all", "null", JSON.stringify({ surah: 2, ayah: 30 })]) {
-      storage.setItem(BOOKMARKS_KEY, stored);
-
-      expect(readBookmarks(storage), stored).toEqual([]);
-    }
-  });
-
-  it("returns nothing when the browser denies storage entirely", () => {
-    expect(readBookmarks(null)).toEqual([]);
-  });
-});
-
-describe("isBookmarked", () => {
-  it("recognises an Ayah in the list", () => {
-    expect(isBookmarked([ayah(2, 30), ayah(36, 1)], ayah(36, 1))).toBe(true);
-  });
-
-  it("does not confuse the same Ayah number in another Surah", () => {
-    expect(isBookmarked([ayah(2, 1)], ayah(36, 1))).toBe(false);
+    expect(() => forgetBookmarks(null)).not.toThrow();
   });
 });

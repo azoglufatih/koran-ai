@@ -8,4 +8,4 @@ The AI Client's calls are covered by the same rule from the other side: the work
 
 The shell is cached as the reader loads it rather than precached at install, because the build output is named by content hashes that a hand-written worker cannot know ahead of time. Those hashed files are served cache-first — the name changes when the contents do, so a hit cannot be stale. Everything else of the app's own is served from the cache while a fresh copy is fetched behind it, which means a deploy reaches an already-installed reader one visit late. Trade-off accepted: the alternative is making every repeat visit wait on the network for a shell that has almost always not changed.
 
-Because the reader's own browser is where all of this is kept, it stays inside the same trust boundary as their bookmarks and their provider config: a cache in their browser, cleared with the rest of the site's data, sent nowhere.
+Because the reader's own browser is where all of this is kept, it stays inside the same trust boundary as their reading position and their provider config: a cache in their browser, cleared with the rest of the site's data, sent nowhere.

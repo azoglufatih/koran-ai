@@ -193,6 +193,7 @@ describe("Verse Context", () => {
     ref: { surah: 2, ayah: 40 },
     arabic: ARABIC,
     translation: { language: "en", text: ENGLISH },
+    transliteration: null,
     selection: { in: "translation", start: 2, end: 20 },
   };
 
@@ -309,6 +310,7 @@ describe("retrieved passages", () => {
         ref: { surah: 2, ayah: 45 },
         arabic: "وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ",
         translation: { language: "en", text: "Seek help in steadfastness and prayer" },
+        transliteration: null,
         selection: { in: "translation", start: 13, end: 26 },
       },
     });
@@ -358,6 +360,7 @@ describe("retrieved passages", () => {
         ref: { surah: 94, ayah: 5 },
         arabic: "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
         translation: { language: "en", text: "But lo! with hardship goeth ease" },
+        transliteration: null,
         selection: { in: "translation", start: 13, end: 21 },
       },
     });

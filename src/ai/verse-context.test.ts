@@ -5,6 +5,7 @@ import { selectedText, verseContextPrompt, type VerseContext } from "./verse-con
 // linguistically right and historically opaque.
 const ARABIC = "يَٰبَنِىٓ إِسْرَٰٓءِيلَ ٱذْكُرُوا۟ نِعْمَتِىَ ٱلَّتِىٓ أَنْعَمْتُ عَلَيْكُمْ";
 const ENGLISH = "O Children of Israel! Remember My favour wherewith I favoured you";
+const LATIN = "Yā Banī 'Isrā'īla Adhkurū Ni`matiya Allatī 'An`amtu `Alaykum";
 
 /** Where a span sits in the text, the way the reader's own selection arrives — offsets, not words. */
 function spanning(text: string, words: string) {
@@ -17,9 +18,17 @@ const asking = (context: Partial<VerseContext> = {}): VerseContext => ({
   ref: { surah: 2, ayah: 40 },
   arabic: ARABIC,
   translation: { language: "en", text: ENGLISH },
+  transliteration: null,
   selection: { in: "arabic", ...spanning(ARABIC, "إِسْرَٰٓءِيلَ") },
   ...context,
 });
+
+/** A reader who selected in the Latin line, which is the only case that carries it. */
+const askingInTheTransliteration = (words: string) =>
+  asking({
+    transliteration: { scheme: "ara-quranphoneticst", text: LATIN },
+    selection: { in: "transliteration", ...spanning(LATIN, words) },
+  });
 
 describe("selected text", () => {
   it("is the span the reader marked, read back out of the Ayah it came from", () => {
@@ -78,5 +87,46 @@ describe("the grounding sent with a question", () => {
 
     expect(prompt.replaceAll(/[⟦⟧]/g, "")).toContain(ARABIC);
     expect(prompt).not.toMatch(/translation/i);
+  });
+});
+
+describe("a question asked about the Transliteration", () => {
+  it("marks the Latin words, and sends the Arabic beside them unmarked", () => {
+    const prompt = verseContextPrompt(askingInTheTransliteration("'Isrā'īla"));
+
+    expect(prompt).toContain("Yā Banī ⟦'Isrā'īla⟧ Adhkurū");
+    expect(prompt).toContain(ARABIC);
+    expect(prompt).not.toContain("⟦إِسْرَٰٓءِيلَ⟧");
+  });
+
+  // Nothing in the app can line the two scripts up, so the model is told to do it — the one
+  // reliance ADR 0005 accepts, because refusing it leaves the reader no way to ask at all.
+  it("asks the model to work out which Arabic words the marked Latin spells", () => {
+    const prompt = verseContextPrompt(askingInTheTransliteration("'Isrā'īla"));
+
+    expect(prompt).toMatch(/transliteration/i);
+    expect(prompt).toMatch(/which Arabic words/i);
+  });
+
+  it("reads the selected words back out of the Latin line", () => {
+    expect(selectedText(askingInTheTransliteration("Ni`matiya"))).toBe("Ni`matiya");
+  });
+
+  it("still carries the translation the reader has open", () => {
+    expect(verseContextPrompt(askingInTheTransliteration("'Isrā'īla"))).toContain(ENGLISH);
+  });
+});
+
+// It renders the Arabic's sound rather than its meaning, so it adds nothing the Arabic does not
+// already carry — and every question that isn't about it is one it stays out of.
+describe("a question asked about anything else", () => {
+  it("carries no Transliteration at all", () => {
+    for (const context of [
+      asking(),
+      asking({ selection: { in: "translation", ...spanning(ENGLISH, "Children of Israel") } }),
+    ]) {
+      expect(verseContextPrompt(context)).not.toMatch(/transliteration/i);
+      expect(verseContextPrompt(context)).not.toContain(LATIN);
+    }
   });
 });

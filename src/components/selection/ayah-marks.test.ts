@@ -47,7 +47,7 @@ describe("arabicAyahTexts", () => {
   });
 
   it("finds nothing on a page with no Reading Pane at all", () => {
-    document.body.innerHTML = "<h1>Bookmarks</h1>";
+    document.body.innerHTML = "<h1>The Quran</h1>";
 
     expect(arabicAyahTexts(document)).toEqual([]);
   });

@@ -13,11 +13,18 @@ A chapter of the Quran, composed of an ordered sequence of Ayahs.
 _Avoid_: Chapter
 
 **Reading Pane**:
-The primary, always-present view showing the Quran text in Arabic. The anchor the rest of the UI is arranged around.
+The primary, always-present view showing the Quran text in Arabic. The anchor the rest of the UI is arranged around, and the one Column the reader cannot close.
+
+**Transliteration**:
+The Arabic of an Ayah written in Latin script, shown beneath it so a reader who cannot read the script can still sound the Ayah out. A rendering of the Arabic itself, not of its meaning — which is what separates it from a Translation.
+_Avoid_: Romanization, Latin text, phonetics
+
+**Column**:
+A vertical slot in the reading workspace holding one or more Tabs, of which one shows at a time. Columns are what a reader sees at once; a narrow screen cannot place anything side by side, so it shows every Tab in one swipeable strip and the grouping into Columns is hidden rather than lost.
 
 **Tab**:
-An appendable secondary panel the user opens alongside the Reading Pane to view a translation, a tafsir, or an AI conversation. Multiple Tabs of different kinds can be open at once. Rendered as horizontal tabs on wide screens and as swipeable/stacked panels on mobile — same concept, responsive presentation.
-_Avoid_: Panel (use Tab as the canonical UI term; "panel" is fine only when describing responsive/mobile behavior)
+One thing a reader has open inside a Column — a translation, a tafsir, or an AI conversation. Several Tabs in one Column are alternatives the reader flicks between; things they want to see together go in separate Columns.
+_Avoid_: Panel (use Tab as the canonical UI term; "panel" is fine only when describing narrow-screen behavior)
 
 **Translation Tab**:
 A Tab showing the Quran text rendered into a chosen language.
@@ -29,7 +36,7 @@ A Tab showing scholarly commentary/exegesis for the Ayahs currently in view, in 
 A Tab holding a chat conversation where the user asks about the meaning of text they've selected, grounded in Verse Context.
 
 **Verse Context**:
-The grounding data sent to the AI for a question: the full Ayah (Arabic plus the active translation), with the user's selected span marked, rather than the selected fragment alone.
+The grounding data sent to the AI for a question: the full Ayah — the Arabic, the active translation, and the Transliteration when that is where the reader selected — with the selected span marked, rather than the selected fragment alone.
 
 **Retrieval Index**:
 A search index over the translations and tafsir, built ahead of time and shipped with the app as static files. Holds the words of the corpus, not its text; the text itself is read back from the corpus when a passage is retrieved.
@@ -47,8 +54,5 @@ One Ayah's translation or tafsir that a reader's question found in the Retrieval
 **App Shell**:
 The app's own code and assets — the HTML, JavaScript, CSS and icons a build produces — as against the corpus it fetches. The service worker keeps the App Shell in the reader's browser so opening the app again is fast; the translations, tafsir and Retrieval Index are read over the network every time. The Arabic is bundled rather than fetched, so it is part of the App Shell (see `docs/adr/0004-app-shell-cached-corpus-not.md`).
 
-**Bookmark**:
-An Ayah the reader has marked to come back to, deliberately. Kept in the reader's own browser, never on a server.
-
 **Reading Position**:
-The Ayah the reader last had in front of them, kept automatically as they read — one per reader, not per Surah. Distinct from a Bookmark: a Bookmark is chosen, a Reading Position is merely observed.
+The Ayah the reader last had in front of them, kept automatically as they read — one per reader, not per Surah. Observed rather than chosen, and kept in the reader's own browser, never on a server.

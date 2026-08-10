@@ -6,12 +6,23 @@ import { captureVerseContext } from "./capture-verse-context";
 const ARABIC = "يَٰبَنِىٓ إِسْرَٰٓءِيلَ ٱذْكُرُوا۟ نِعْمَتِىَ";
 const ENGLISH = "O Children of Israel! Remember My favour";
 const TURKISH = "Ey İsrailoğulları! Size verdiğim nimeti hatırlayın";
+const LATIN = "Yā Banī 'Isrā'īla Adhkurū Ni`matiya";
+const SCHEME = "ara-quranphoneticst";
 
-/** A Surah page as the reader has arranged it: the Reading Pane, and the Tabs beside it. */
-function page(tabs: string) {
+const inTransliteration = "[data-ayah-role='transliteration']";
+
+/**
+ * A Surah page as the reader has arranged it: the Reading Pane with its Latin lines, and the Tabs
+ * beside it.
+ */
+function page(tabs: string, transliterated = true) {
+  const latin = transliterated
+    ? `<p data-ayah-role="transliteration" data-ayah-scheme="${SCHEME}" data-ayah="2:40">${LATIN}</p>`
+    : "";
+
   document.body.innerHTML = `
     <ol>
-      <li><p data-ayah-role="arabic" data-ayah="2:40">${ARABIC}</p></li>
+      <li><p data-ayah-role="arabic" data-ayah="2:40">${ARABIC}</p>${latin}</li>
       <li><p data-ayah-role="arabic" data-ayah="2:41">وَءَامِنُوا۟ بِمَآ أَنزَلْتُ</p></li>
     </ol>
     <h1>Al-Baqara</h1>
@@ -66,6 +77,60 @@ describe("a selection in the Reading Pane", () => {
     expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translation).toEqual({
       language: "tr",
       text: TURKISH,
+    });
+  });
+});
+
+describe("a selection in the Transliteration", () => {
+  it("is grounded in the same Ayah's Arabic, which sits above it on the page", () => {
+    const context = captureVerseContext(selecting("'Isrā'īla", inTransliteration));
+
+    expect(context).toMatchObject({ ref: { surah: 2, ayah: 40 }, arabic: ARABIC });
+    expect(selectedText(context!)).toBe("'Isrā'īla");
+  });
+
+  it("carries the Latin line, with the selection marked in it rather than in the Arabic", () => {
+    const context = captureVerseContext(selecting("'Isrā'īla", inTransliteration));
+
+    expect(context?.transliteration).toEqual({ scheme: SCHEME, text: LATIN });
+    expect(context?.selection.in).toBe("transliteration");
+  });
+
+  // The reader can switch between three schemes, and offsets counted in one mean nothing in
+  // another — so a line that cannot name its own is not one to ground a question in.
+  it("is ignored when the line names no scheme it can read", () => {
+    page(
+      `<p data-ayah-role="transliteration" data-ayah-scheme="made-up" data-ayah="2:40">${LATIN}</p>
+       ${translationTab("en", ENGLISH, true)}`,
+      false,
+    );
+
+    expect(captureVerseContext(selecting("'Isrā'īla", inTransliteration))).toBeNull();
+  });
+
+  it("carries the translation the reader has open beside it", () => {
+    const context = captureVerseContext(selecting("'Isrā'īla", inTransliteration));
+
+    expect(context?.translation).toEqual({ language: "en", text: ENGLISH });
+  });
+});
+
+// It says nothing the Arabic does not already say, so it goes only with a question about itself.
+describe("a selection anywhere else", () => {
+  it("carries no Transliteration, even with the line on the page", () => {
+    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.transliteration).toBeNull();
+    expect(
+      captureVerseContext(selecting("Children of Israel", inTranslationTab))?.transliteration,
+    ).toBeNull();
+  });
+
+  it("is unchanged for a reader who has the line turned off", () => {
+    page(translationTab("en", ENGLISH, true), false);
+
+    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))).toMatchObject({
+      arabic: ARABIC,
+      transliteration: null,
+      translation: { language: "en", text: ENGLISH },
     });
   });
 });

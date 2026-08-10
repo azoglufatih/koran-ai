@@ -6,6 +6,8 @@ import type {
   TafsirSource,
   TranslationEdition,
   TranslationLanguage,
+  TransliterationScheme,
+  TransliterationSchemeInfo,
 } from "./quran";
 
 const AL_FAATIHA: SurahSummary = {
@@ -66,6 +68,29 @@ const FIXTURE_TRANSLATIONS: Record<string, Record<number, string[]>> = {
   },
 };
 
+const PHONETIC: TransliterationSchemeInfo = {
+  scheme: "ara-quranphoneticst",
+  label: "Phonetic",
+  sample: "Al-Ĥamdu Lillāhi Rabbi Al-`Ālamīna",
+};
+
+const TURKISH_LATIN: TransliterationSchemeInfo = {
+  scheme: "tur-latinalphabet",
+  label: "Türkçe",
+  sample: "El hamdü lillahi rabbil alemin",
+};
+
+const FIXTURE_TRANSLITERATION: Record<string, Record<number, string[]>> = {
+  "ara-quranphoneticst": {
+    1: ["Bismi Allāhi Ar-Raĥmāni Ar-Raĥīmi", "Al-Ĥamdu Lillāhi", "Ar-Raĥmāni Ar-Raĥīmi"],
+    2: ["Alif-Lām-Mīm", "Dhālika Al-Kitābu"],
+  },
+  "tur-latinalphabet": {
+    1: ["Bismillahirrahmanirrahim", "El hamdü lillahi", "Errahmanirrahim"],
+    2: ["Elif lam mim", "İşte o kitap"],
+  },
+};
+
 const ENGLISH_MUKHTASAR: TafsirEdition = {
   source: "al-mukhtasar",
   language: "en",
@@ -99,6 +124,10 @@ function createRepository() {
     async (surahNumber: number, language: TranslationLanguage) =>
       FIXTURE_TRANSLATIONS[language][surahNumber],
   );
+  const loadTransliterationText = vi.fn(
+    async (surahNumber: number, scheme: TransliterationScheme) =>
+      FIXTURE_TRANSLITERATION[scheme][surahNumber],
+  );
   const loadTafsirText = vi.fn(
     async (surahNumber: number, _source: TafsirSource, language: TranslationLanguage) =>
       FIXTURE_TAFSIR[language][surahNumber],
@@ -106,12 +135,20 @@ function createRepository() {
   const repository = createQuranContentRepository({
     surahIndex: [AL_FAATIHA, AL_BAQARA],
     translationEditions: [ENGLISH, TURKISH, GERMAN],
+    transliterationSchemes: [PHONETIC, TURKISH_LATIN],
     tafsirEditions: [ENGLISH_MUKHTASAR, TURKISH_MUKHTASAR],
     loadSurahText,
     loadTranslationText,
+    loadTransliterationText,
     loadTafsirText,
   });
-  return { repository, loadSurahText, loadTranslationText, loadTafsirText };
+  return {
+    repository,
+    loadSurahText,
+    loadTranslationText,
+    loadTransliterationText,
+    loadTafsirText,
+  };
 }
 
 describe("listSurahs", () => {
@@ -243,6 +280,86 @@ describe("getTranslation", () => {
     await expect(
       repository.getTranslation(1, "fr" as TranslationLanguage),
     ).rejects.toThrow('language "fr"');
+  });
+});
+
+describe("listTransliterationSchemes", () => {
+  it("returns every scheme a reader can pick between", () => {
+    const { repository } = createRepository();
+
+    expect(repository.listTransliterationSchemes()).toEqual([PHONETIC, TURKISH_LATIN]);
+  });
+});
+
+describe("getTransliteration", () => {
+  it("returns every Ayah's Latin line, numbered as the Arabic beside it is", async () => {
+    const { repository } = createRepository();
+
+    const transliteration = await repository.getTransliteration(2, "ara-quranphoneticst");
+
+    expect(transliteration.scheme).toBe("ara-quranphoneticst");
+    expect(transliteration.ayahs).toEqual([
+      { ref: { surah: 2, ayah: 1 }, text: "Alif-Lām-Mīm" },
+      { ref: { surah: 2, ayah: 2 }, text: "Dhālika Al-Kitābu" },
+    ]);
+  });
+
+  it("reads the scheme it was asked for, not the default", async () => {
+    const { repository } = createRepository();
+
+    const transliteration = await repository.getTransliteration(2, "tur-latinalphabet");
+
+    expect(transliteration.ayahs[0].text).toBe("Elif lam mim");
+  });
+
+  it("loads text only for the requested Surah", async () => {
+    const { repository, loadTransliterationText } = createRepository();
+
+    await repository.getTransliteration(2, "ara-quranphoneticst");
+
+    expect(loadTransliterationText).toHaveBeenCalledExactlyOnceWith(2, "ara-quranphoneticst");
+  });
+
+  it("rejects a Surah outside the corpus without reading any text", async () => {
+    const { repository, loadTransliterationText } = createRepository();
+
+    await expect(repository.getTransliteration(115, "ara-quranphoneticst")).rejects.toThrow(
+      RangeError,
+    );
+    expect(loadTransliterationText).not.toHaveBeenCalled();
+  });
+
+  // A line that has drifted by one sits under the wrong Ayah, which is worse than no line at all:
+  // the reader sounds out an Ayah they are not looking at.
+  it("refuses a scheme whose Ayah count does not match the Arabic", async () => {
+    const { repository } = createRepository();
+    FIXTURE_TRANSLITERATION["ara-quranphoneticst"][2] = ["Alif-Lām-Mīm"];
+
+    await expect(repository.getTransliteration(2, "ara-quranphoneticst")).rejects.toThrow(
+      "expected 2 transliterated Ayahs, got 1",
+    );
+
+    FIXTURE_TRANSLITERATION["ara-quranphoneticst"][2] = ["Alif-Lām-Mīm", "Dhālika Al-Kitābu"];
+  });
+});
+
+describe("getTransliteratedBasmala", () => {
+  // The 112 Surahs that open with one have it above their numbered Ayahs, where the corpus has no
+  // entry for it — so it comes from Al-Faatiha's 1:1, which is that same text (ADR 0005).
+  it("reads the basmala out of the scheme's own 1:1", async () => {
+    const { repository } = createRepository();
+
+    expect(await repository.getTransliteratedBasmala("ara-quranphoneticst")).toBe(
+      "Bismi Allāhi Ar-Raĥmāni Ar-Raĥīmi",
+    );
+  });
+
+  it("reads it in whichever scheme the reader is on", async () => {
+    const { repository } = createRepository();
+
+    expect(await repository.getTransliteratedBasmala("tur-latinalphabet")).toBe(
+      "Bismillahirrahmanirrahim",
+    );
   });
 });
 

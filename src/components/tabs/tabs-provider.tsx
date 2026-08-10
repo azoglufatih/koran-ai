@@ -4,64 +4,74 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   useSyncExternalStore,
 } from "react";
 import { detectTranslationLanguage } from "@/content/translation-language";
-import type { TafsirSource, TranslationLanguage } from "@/content/quran";
+import type { TranslationLanguage } from "@/content/quran";
 import type { VerseContext } from "@/ai/verse-context";
-
-/**
- * A Tab the reader has opened alongside the Reading Pane.
- */
-export interface TranslationTab {
-  id: string;
-  kind: "translation";
-  language: TranslationLanguage;
-}
-
-export interface TafsirTab {
-  id: string;
-  kind: "tafsir";
-  source: TafsirSource;
-  language: TranslationLanguage;
-}
-
-/**
- * Unlike the other Tabs, an AI Tab is not identified by what it shows — it is a conversation, and a
- * reader asking about a second Ayah wants a second one rather than the one they already have.
- * `conversation` numbers them so two AI Tabs are tellable apart in the Tab strip.
- */
-export interface AiTab {
-  id: string;
-  kind: "ai";
-  conversation: number;
-  /**
-   * The Ayah the reader selected words in to start this conversation. Absent for a Tab they opened
-   * from the Tab strip, which is a question about the Surah at large rather than about one Ayah.
-   */
-  verseContext?: VerseContext;
-}
-
-export type Tab = TranslationTab | TafsirTab | AiTab;
+import { browserStorage, rememberedInBrowser } from "@/components/reading/remembered-in-browser";
+import type { Openable } from "./openables";
+import {
+  inColumn,
+  newColumn,
+  tabsIn,
+  withTabActivated,
+  withTabClosed,
+  withTabOpened,
+  type Column,
+  type ColumnTarget,
+} from "./column-arrangement";
+import { aiTab, nextConversation, tafsirTab, translationTab, type Tab } from "./tabs";
+import {
+  readColumnArrangement,
+  restoredColumns,
+  writeColumnArrangement,
+} from "./stored-arrangement";
+import { useSideBySideCap } from "./side-by-side-cap";
 
 interface TabsValue {
+  /** The reader's Columns, left to right. The Reading Pane is not among them — it is not theirs
+   * to arrange, and cannot be closed. */
+  columns: Column[];
+  /** Every Tab of every Column, in the order they sit on screen. */
   tabs: Tab[];
-  activeTabId: string | null;
+  /**
+   * The Tab the reader is on where Columns cannot show — the narrow-screen strip, which is every
+   * Tab of every Column in one swipeable row. Each Column names its own showing Tab besides.
+   */
+  focusedTabId: string | null;
   /** The reader's own language, or null before hydration — the prerender cannot know it. */
   readerLanguage: TranslationLanguage | null;
-  /** Opens a Translation Tab for the language, or focuses it if one is already open. */
-  openTranslationTab(language: TranslationLanguage): void;
-  /** Opens a Tafsir Tab for the source and language, or focuses it if one is already open. */
-  openTafsirTab(source: TafsirSource, language: TranslationLanguage): void;
+  /** How many reader Columns fit beside the Reading Pane at this width; 0 below `xl`. */
+  sideBySideCap: number;
   /**
-   * Opens a new AI Tab — always a fresh conversation, never a focus of an existing one. Pass the
-   * Verse Context to ground the conversation in one Ayah; omit it to start an open-ended one.
+   * Opens the chosen thing where it was asked for, or focuses the Tab already showing it. AI is
+   * the exception twice over: every choice of it is a new conversation rather than a focus of one
+   * open, and it picks its own Column rather than taking the target.
+   */
+  openTab(openable: Openable, target: ColumnTarget): void;
+  /**
+   * Opens a new AI Tab grounded in one Ayah — the way in from a selection, as against picking AI
+   * out of the menu, which starts an open-ended conversation about the Surah at large.
    */
   openAiTab(verseContext?: VerseContext): void;
+  /** Closes the Tab, and the Column with it if that was its last. */
   closeTab(id: string): void;
+  /** Brings the Tab to the front of the Column holding it, and focuses it in the strip. */
   activateTab(id: string): void;
+
+  /**
+   * The one menu open anywhere in the workspace, named by whatever opened it, or null when none is.
+   * There are several `+` buttons on screen and a scheme picker beside them, and a reader opening
+   * one menu means they are done with the last — which only holds if they all share this.
+   */
+  openMenuId: string | null;
+  /** Opens this menu, closing whichever was open; opening the one already open closes it. */
+  toggleMenu(id: string): void;
+  closeMenu(): void;
 }
 
 const TabsContext = createContext<TabsValue | null>(null);
@@ -71,36 +81,6 @@ export function useTabs(): TabsValue {
   if (!value) throw new Error("useTabs must be used inside a TabsProvider");
   return value;
 }
-
-// A Tab's identity is what it shows, so opening the same thing twice focuses the Tab already
-// showing it. Exported so the menus can ask whether a Tab is open without re-deriving the id.
-export const translationTabId = (language: TranslationLanguage) => `translation:${language}`;
-
-export const tafsirTabId = (source: TafsirSource, language: TranslationLanguage) =>
-  `tafsir:${source}:${language}`;
-
-const aiTabId = (conversation: number) => `ai:${conversation}`;
-
-const translationTab = (language: TranslationLanguage): Tab => ({
-  id: translationTabId(language),
-  kind: "translation",
-  language,
-});
-
-const tafsirTab = (source: TafsirSource, language: TranslationLanguage): Tab => ({
-  id: tafsirTabId(source, language),
-  kind: "tafsir",
-  source,
-  language,
-});
-
-// Numbered past whatever the reader currently has open, so a new conversation never lands on the
-// id of one already on screen. A number frees up again once no open AI Tab is above it.
-const nextAiTab = (visible: readonly Tab[], verseContext?: VerseContext): Tab => {
-  const conversations = visible.filter((tab) => tab.kind === "ai").map((tab) => tab.conversation);
-  const conversation = Math.max(0, ...conversations) + 1;
-  return { id: aiTabId(conversation), kind: "ai", conversation, verseContext };
-};
 
 // A reader's browser locales don't change mid-session, so there is nothing to subscribe to.
 const noLocaleChanges = () => () => {};
@@ -119,86 +99,167 @@ function useReaderLanguage(): TranslationLanguage | null {
   );
 }
 
-const defaultTabs = (readerLanguage: TranslationLanguage | null): Tab[] =>
-  readerLanguage ? [translationTab(readerLanguage)] : [];
+/**
+ * What the reader arranged last time, or null if they have not arranged anything — including while
+ * prerendering, since a static export has no reader's browser to read from until hydration. The
+ * two are deliberately different answers: null falls through to the first-visit default below,
+ * while an empty list is a reader who closed every Column and should get an empty workspace back.
+ */
+const arrangementInBrowser = rememberedInBrowser<Column[] | null>((storage) => {
+  const stored = readColumnArrangement(storage);
+  return stored && restoredColumns(stored);
+}, null);
+
+const defaultColumns = (readerLanguage: TranslationLanguage | null): Column[] => {
+  if (!readerLanguage) return [];
+  const tab = translationTab(readerLanguage);
+  return [{ id: "column:1", tabs: [tab], activeTabId: tab.id }];
+};
 
 export function TabsProvider({ children }: { children: React.ReactNode }) {
   const readerLanguage = useReaderLanguage();
-  // Null until the reader opens or closes something themselves — see `tabs` below.
-  const [chosenTabs, setChosenTabs] = useState<Tab[] | null>(null);
+  const sideBySideCap = useSideBySideCap();
+  // Null until the reader arranges something in this session — see `columns` below.
+  const [chosenColumns, setChosenColumns] = useState<Column[] | null>(null);
+  const restored = useSyncExternalStore(
+    arrangementInBrowser.subscribe,
+    arrangementInBrowser.getSnapshot,
+    arrangementInBrowser.getServerSnapshot,
+  );
   const [requestedTabId, setRequestedTabId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // A first visit shouldn't be Arabic-only text with no obvious way to get a translation, so
-  // until the reader arranges their own Tabs they get one in their own language. Deriving that
-  // rather than seeding state keeps "reader closed every Tab" distinct from "reader hasn't
-  // touched anything yet", so a closed Tab stays closed.
-  const tabs = useMemo(
-    () => chosenTabs ?? defaultTabs(readerLanguage),
-    [chosenTabs, readerLanguage],
+  // What the reader arranged in this session, else what they arranged in the last one, else the
+  // first visit — which shouldn't be Arabic-only text with no obvious way to get a translation, so
+  // it is one Tab in their own language. Deriving that rather than seeding state keeps "reader
+  // closed everything" distinct from "reader hasn't touched anything yet", so a closed Column
+  // stays closed and an empty workspace comes back empty.
+  const columns = useMemo(
+    () => chosenColumns ?? restored ?? defaultColumns(readerLanguage),
+    [chosenColumns, restored, readerLanguage],
   );
 
-  // Derived rather than stored, so closing the active Tab falls back to the first remaining one
-  // without closeTab having to reach into the Tab list to fix the selection up.
-  const activeTabId = tabs.find((tab) => tab.id === requestedTabId)?.id ?? tabs[0]?.id ?? null;
+  // Only ever what the reader arranged in this session. Writing the restored or derived value back
+  // would turn "hasn't touched anything yet" into "chose this", and a first Translation Tab that
+  // was auto-detected once would go on being their choice in a language they may since have
+  // stopped reading in.
+  useEffect(() => {
+    if (chosenColumns) writeColumnArrangement(browserStorage(), chosenColumns);
+  }, [chosenColumns]);
+
+  const tabs = useMemo(() => tabsIn(columns), [columns]);
+
+  // The one Tab the reader is on where Columns cannot show — the narrow-screen strip, where every
+  // Tab of every Column is one swipeable panel. Derived rather than stored, so closing the Tab it
+  // named falls back to one still open without closeTab having to fix it up.
+  const focusedTabId = tabs.find((tab) => tab.id === requestedTabId)?.id ?? tabs[0]?.id ?? null;
 
   // Every rearrangement starts from what the reader can currently see, which is the derived
-  // default until they've chosen for themselves.
-  const rearrangeTabs = useCallback(
-    (rearrange: (visible: Tab[]) => Tab[]) => {
-      setChosenTabs((chosen) => rearrange(chosen ?? defaultTabs(readerLanguage)));
+  // default until they've arranged things for themselves.
+  const rearrange = useCallback(
+    (arrange: (visible: Column[]) => Column[]) => {
+      setChosenColumns((chosen) => arrange(chosen ?? restored ?? defaultColumns(readerLanguage)));
     },
-    [readerLanguage],
+    [restored, readerLanguage],
   );
 
-  // Opening a Tab the reader already has open focuses it instead of stacking a duplicate.
-  const openTab = useCallback(
-    (tab: Tab) => {
-      rearrangeTabs((visible) =>
-        visible.some((open) => open.id === tab.id) ? visible : [...visible, tab],
-      );
+  const showTab = useCallback(
+    (tab: Tab, target: ColumnTarget) => {
+      rearrange((visible) => withTabOpened(visible, tab, target));
       setRequestedTabId(tab.id);
     },
-    [rearrangeTabs],
-  );
-
-  const openTranslationTab = useCallback(
-    (language: TranslationLanguage) => openTab(translationTab(language)),
-    [openTab],
-  );
-
-  const openTafsirTab = useCallback(
-    (source: TafsirSource, language: TranslationLanguage) => openTab(tafsirTab(source, language)),
-    [openTab],
+    [rearrange],
   );
 
   // Every other Tab is identified by what it shows, so opening one twice focuses it. A conversation
-  // has no such identity: its number comes from the Tabs the reader can see, which makes every
-  // press a Tab openTab has never seen and so always a new conversation. Asking about a second
+  // has no such identity: its number comes from the Tabs the reader can see, which makes every one
+  // a Tab the arrangement has never seen and so always a new conversation. Asking about a second
   // selection therefore leaves the first conversation intact, to come back to.
+  //
+  // It lands in a Column of its own while there is width for one, and joins the last Column when
+  // there is not — which is also what happens on a narrow screen, where the cap is zero because
+  // nothing can sit beside anything anyway.
+  // Where a conversation the reader did not ask for a place for should go: a Column of its own
+  // while there is width for one, and the last Column when there is not — which is also what
+  // happens on a narrow screen, where the cap is zero because nothing sits beside anything anyway.
+  const columnForNewConversation = useCallback((): ColumnTarget => {
+    const last = columns.at(-1);
+    return !last || columns.length < sideBySideCap ? newColumn : inColumn(last.id);
+  }, [columns, sideBySideCap]);
+
   const openAiTab = useCallback(
-    (verseContext?: VerseContext) => openTab(nextAiTab(tabs, verseContext)),
-    [openTab, tabs],
+    (verseContext?: VerseContext) =>
+      showTab(aiTab(nextConversation(tabs), { verseContext }), columnForNewConversation()),
+    [showTab, tabs, columnForNewConversation],
+  );
+
+  const openTab = useCallback(
+    (openable: Openable, target: ColumnTarget) => {
+      switch (openable.kind) {
+        case "translation":
+          return showTab(translationTab(openable.language), target);
+        case "tafsir":
+          return showTab(tafsirTab(openable.source, openable.language), target);
+        case "ai":
+          // No Verse Context: chosen from a menu rather than from a selection, this is a question
+          // about the Surah at large. It still lands where the menu that opened it says — a `+` in
+          // a Column's own strip adds to that Column, AI included, which is what keeps that `+`
+          // useful once the workspace is too full for another Column.
+          return showTab(aiTab(nextConversation(tabs), {}), target);
+      }
+    },
+    [showTab, tabs],
   );
 
   const closeTab = useCallback(
-    (id: string) => {
-      rearrangeTabs((visible) => visible.filter((tab) => tab.id !== id));
-    },
-    [rearrangeTabs],
+    (id: string) => rearrange((visible) => withTabClosed(visible, id)),
+    [rearrange],
   );
+
+  const activateTab = useCallback(
+    (id: string) => {
+      rearrange((visible) => withTabActivated(visible, id));
+      setRequestedTabId(id);
+    },
+    [rearrange],
+  );
+
+  const toggleMenu = useCallback(
+    (id: string) => setOpenMenuId((open) => (open === id ? null : id)),
+    [],
+  );
+
+  const closeMenu = useCallback(() => setOpenMenuId(null), []);
 
   const value = useMemo(
     () => ({
+      columns,
       tabs,
-      activeTabId,
+      focusedTabId,
       readerLanguage,
-      openTranslationTab,
-      openTafsirTab,
+      sideBySideCap,
+      openTab,
       openAiTab,
       closeTab,
-      activateTab: setRequestedTabId,
+      activateTab,
+      openMenuId,
+      toggleMenu,
+      closeMenu,
     }),
-    [tabs, activeTabId, readerLanguage, openTranslationTab, openTafsirTab, openAiTab, closeTab],
+    [
+      columns,
+      tabs,
+      focusedTabId,
+      readerLanguage,
+      sideBySideCap,
+      openTab,
+      openAiTab,
+      closeTab,
+      activateTab,
+      openMenuId,
+      toggleMenu,
+      closeMenu,
+    ],
   );
 
   return <TabsContext.Provider value={value}>{children}</TabsContext.Provider>;

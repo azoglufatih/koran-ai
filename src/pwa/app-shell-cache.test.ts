@@ -20,7 +20,6 @@ describe("cachingFor", () => {
   it("serves a page from the cache while fetching the version that replaced it", () => {
     expect(cachingFor(get(`${SCOPE}`), SCOPE)).toBe(REVALIDATE_WHILE_SERVING);
     expect(cachingFor(get(`${SCOPE}surah/18`), SCOPE)).toBe(REVALIDATE_WHILE_SERVING);
-    expect(cachingFor(get(`${SCOPE}bookmarks`), SCOPE)).toBe(REVALIDATE_WHILE_SERVING);
   });
 
   it("does the same for the manifest and icons, which no hash renames", () => {

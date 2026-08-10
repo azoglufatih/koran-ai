@@ -19,10 +19,14 @@ function offsetsWithin(element: Element, range: Range) {
 const asTranslation = (found: AyahText | null) =>
   found?.language ? { language: found.language, text: found.text } : null;
 
+const asTransliteration = (found: AyahText) =>
+  found.scheme ? { scheme: found.scheme, text: found.text } : null;
+
 /**
  * The Ayah a reader has selected words in, as they are reading it — the Arabic from the Reading
  * Pane and the translation from the Tab they are on, both taken off the page so that what the AI
- * is given is exactly what is in front of them.
+ * is given is exactly what is in front of them. A reader who selected in the Transliteration
+ * beneath the Arabic gets that carried too, since nothing else on the page would let them ask.
  *
  * Null when there is no single Ayah to ground in: a selection spanning two of them, one outside
  * the Quran text, or a caret left behind after a click.
@@ -47,6 +51,9 @@ export function captureVerseContext(range: Range): VerseContext | null {
       selected.role === "translation"
         ? asTranslation(selected)
         : asTranslation(otherAyahText(page, "translation", selected.ref)),
+    // Carried only when the reader selected in it. Elsewhere on the page it is the same Arabic in
+    // another script, which the model already has — see ADR 0005.
+    transliteration: selected.role === "transliteration" ? asTransliteration(selected) : null,
     selection: { in: selected.role, ...offsetsWithin(selected.element, range) },
   };
 }

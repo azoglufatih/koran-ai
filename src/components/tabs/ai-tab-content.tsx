@@ -6,18 +6,46 @@ import type { ChatMessage } from "@/ai/ai-client";
 import { selectedText, type VerseContext } from "@/ai/verse-context";
 import { ProviderSettings } from "@/components/ai/provider-settings";
 import { useAiProviderConfig } from "@/components/ai/use-ai-provider-config";
+import { LoadedTabContent } from "./loaded-tab-content";
+import { restoreVerseContext } from "./restore-verse-context";
 import { RetryNotice } from "./retry-notice";
 import { useTabs } from "./tabs-provider";
+import type { AiTab } from "./tabs";
 
 /**
- * One AI Tab: a conversation of its own. The turns live in this component's state, so opening a
- * second AI Tab starts a second conversation and neither loses what came before — closing a Tab is
- * what ends one, since nothing about a reader's questions is written down anywhere.
+ * One AI Tab, grounded in whichever way it came to be open.
  *
- * A Tab opened from a selection carries the Verse Context that selection made, and every question
- * asked in it — the first and each follow-up — goes to the provider grounded in that Ayah.
+ * A Tab the reader opened from a selection has the Verse Context that selection made, taken off the
+ * page in front of them. A Tab restored after a reload has only the reference and offsets their
+ * browser kept, so the texts are read back out of the corpus first — the fetch a restored Tab pays
+ * for instead of the app storing the reader's Quran text.
  */
-export function AiTabContent({ verseContext }: { verseContext?: VerseContext }) {
+export function AiTabContent({ tab }: { tab: AiTab }) {
+  if (tab.verseContext) return <AiConversation verseContext={tab.verseContext} />;
+  if (!tab.grounding) return <AiConversation />;
+
+  const { grounding } = tab;
+
+  return (
+    <LoadedTabContent
+      cacheKey={`ai-grounding:${tab.id}`}
+      load={() => restoreVerseContext(grounding)}
+      loadingLabel="Reading the Ayah this conversation is about…"
+    >
+      {(verseContext) => <AiConversation verseContext={verseContext} />}
+    </LoadedTabContent>
+  );
+}
+
+/**
+ * The conversation itself. The turns live in this component's state, so opening a second AI Tab
+ * starts a second conversation and neither loses what came before — closing a Tab is what ends one,
+ * since nothing about a reader's questions is written down anywhere, not even to restore it.
+ *
+ * Every question asked here — the first and each follow-up — goes to the provider grounded in the
+ * Ayah above.
+ */
+function AiConversation({ verseContext }: { verseContext?: VerseContext }) {
   const { config } = useAiProviderConfig();
   // Which shard of the corpus the question is retrieved from — the reader's own language, the same
   // one their Translation Tab opened in.

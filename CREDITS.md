@@ -41,6 +41,23 @@ into the public domain (Unlicense). Each translation is credited to its translat
 Each translator is credited in the UI, at the foot of their Translation Tab. Regenerate the
 vendored text with `npm run vendor:translations`.
 
+## Transliterations
+
+The Latin-script transliterations in `public/content/transliteration/` are vendored from the same
+public-domain compilation as the translations,
+[fawazahmed0/quran-api](https://github.com/fawazahmed0/quran-api). Three schemes ship, because the
+reader chooses which one they read:
+
+| Scheme | 1:2 reads | Upstream edition |
+| --- | --- | --- |
+| Phonetic (default) | `Al-Ĥamdu Lillāhi Rabbi Al-`Ālamīna` | `ara-quranphoneticst` |
+| Simple | `Alhamdu lillaahi Rabbil 'aalameen` | `ara-quran-la1` |
+| Türkçe | `El hamdü lillahi rabbil alemin` | `tur-latinalphabet` |
+
+A fourth upstream edition, `ara-quran-la`, is deliberately not offered: it encodes ayn as `AA`,
+which a reader sounding the word out would read as "ay-ay". Regenerate the vendored text with
+`npm run vendor:transliteration`.
+
 ## Tafsir — Al-Mukhtasar
 
 The commentary in `public/content/tafsir/` is
