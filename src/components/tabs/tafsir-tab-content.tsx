@@ -37,7 +37,18 @@ export function TafsirTabContent({
               >
                 {tafsir.edition.attribution}
               </a>
-              , licensed CC BY 4.0.
+              , licensed{" "}
+              {/* CC BY 4.0 obliges a licensor's credit to carry the licence itself, not only its
+                  name — so this links, and the text is shown verbatim. */}
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                target="_blank"
+                rel="license noreferrer"
+                className="underline decoration-dotted underline-offset-2"
+              >
+                CC BY 4.0
+              </a>
+              .
             </p>
           </div>
         ) : (

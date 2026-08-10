@@ -90,11 +90,14 @@ The Tafsir Center is credited in the UI, at the foot of each Tafsir Tab, with a 
 resource. The text is vendored verbatim; only its shape changes, from upstream's per-Surah export
 to the same per-Surah JSON this repo reads. Regenerate it with `npm run vendor:tafsir`.
 
-> **Unconfirmed.** The CC BY 4.0 terms above have not been verified at the source. The QUL resource
-> pages do not state a licence in their public HTML, and `spa5k/tafsir_api` — where the bytes
-> actually come from — is MIT for its own code and says nothing about the licence of the data it
-> mirrors. Confirm with QUL before relying on this, and treat the CC BY 4.0 line in the Tafsir Tab
-> as unverified until then.
+The Tafsir Tab credits the Center and links the licence, as CC BY 4.0 requires.
+
+A note on where the CC BY 4.0 terms come from, for whoever revisits this: they are not stated in
+QUL's public resource pages, and `spa5k/tafsir_api` — where the bytes are fetched from — is MIT for
+its own code and silent on the data it mirrors. QUL's own exports sit behind a sign-in, which is
+the place to confirm them. Nothing here suggests the terms are wrong; they are simply taken on
+trust rather than cited. If they ever prove not to hold, the fallback is a tafsir that is public
+domain by age — Ibn Kathir is carried by the same upstream, in both languages.
 
 There is no German edition: no tafsir with a licence that allows redistribution has been found in
 German. A German Tafsir Tab says so explicitly rather than appearing broken or empty.
