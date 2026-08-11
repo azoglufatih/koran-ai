@@ -192,9 +192,10 @@ describe("Verse Context", () => {
   const ASKING_ABOUT_2_40: VerseContext = {
     ref: { surah: 2, ayah: 40 },
     arabic: ARABIC,
-    translation: { language: "en", text: ENGLISH },
+    translations: [{ language: "en", text: ENGLISH }],
     transliteration: null,
-    selection: { in: "translation", start: 2, end: 20 },
+    commentary: null,
+    selection: { in: "translation", language: "en", start: 2, end: 20 },
   };
 
   const askAbout = async (verseContext?: VerseContext) => {
@@ -297,6 +298,7 @@ describe("retrieved passages", () => {
     expect(retriever.retrieve).toHaveBeenCalledWith(
       expect.stringContaining("What is steadfastness?"),
       "en",
+      undefined,
     );
   });
 
@@ -309,14 +311,69 @@ describe("retrieved passages", () => {
       verseContext: {
         ref: { surah: 2, ayah: 45 },
         arabic: "وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ",
-        translation: { language: "en", text: "Seek help in steadfastness and prayer" },
+        translations: [{ language: "en", text: "Seek help in steadfastness and prayer" }],
         transliteration: null,
-        selection: { in: "translation", start: 13, end: 26 },
+        commentary: null,
+        selection: { in: "translation", language: "en", start: 13, end: 26 },
       },
     });
 
     // "What does this mean?" shares no word with the corpus; the selection is the whole question.
-    expect(retriever.retrieve).toHaveBeenCalledWith(expect.stringContaining("steadfastness"), "en");
+    expect(retriever.retrieve).toHaveBeenCalledWith(
+      expect.stringContaining("steadfastness"),
+      "en",
+      { surah: 2, ayah: 45 },
+    );
+  });
+
+  /**
+   * Which is what makes an Anchor Passage possible: retrieval can only guarantee the commentary on
+   * the Ayah the reader is asking about if it is told which Ayah that is, rather than left to find
+   * it among the words of a question that may share none.
+   */
+  it("tells retrieval which Ayah the question is about", async () => {
+    const retriever = retrieving(SEEK_HELP);
+
+    await askWith(retriever, {
+      language: "en",
+      verseContext: {
+        ref: { surah: 2, ayah: 40 },
+        arabic: "يَٰبَنِىٓ إِسْرَٰٓءِيلَ",
+        translations: [],
+        transliteration: null,
+        commentary: null,
+        selection: { in: "arabic", start: 0, end: 6 },
+      },
+    });
+
+    expect(retriever.retrieve).toHaveBeenCalledWith(expect.any(String), "en", {
+      surah: 2,
+      ayah: 40,
+    });
+  });
+
+  // The commentary is already in front of the model as Verse Context, attributed and framed as a
+  // claim about the Ayah; anchoring on it would send the same words again in a plainer voice.
+  it("does not anchor on an Ayah's commentary the reader selected in themselves", async () => {
+    const retriever = retrieving(SEEK_HELP);
+
+    await askWith(retriever, {
+      language: "en",
+      verseContext: {
+        ref: { surah: 2, ayah: 40 },
+        arabic: "يَٰبَنِىٓ إِسْرَٰٓءِيلَ",
+        translations: [],
+        transliteration: null,
+        commentary: {
+          source: "al-mukhtasar",
+          language: "en",
+          text: "Allah reminds the Israelites of the favours He bestowed",
+        },
+        selection: { in: "tafsir", start: 4, end: 11 },
+      },
+    });
+
+    expect(retriever.retrieve).toHaveBeenCalledWith(expect.any(String), "en", undefined);
   });
 
   it("searches the last thing asked, not the whole conversation", async () => {
@@ -331,7 +388,11 @@ describe("retrieved passages", () => {
       language: "en",
     });
 
-    expect(retriever.retrieve).toHaveBeenCalledWith(expect.not.stringContaining("Thamud"), "en");
+    expect(retriever.retrieve).toHaveBeenCalledWith(
+      expect.not.stringContaining("Thamud"),
+      "en",
+      undefined,
+    );
   });
 
   it("does not search before the reader's language is known", async () => {
@@ -359,9 +420,10 @@ describe("retrieved passages", () => {
       verseContext: {
         ref: { surah: 94, ayah: 5 },
         arabic: "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
-        translation: { language: "en", text: "But lo! with hardship goeth ease" },
+        translations: [{ language: "en", text: "But lo! with hardship goeth ease" }],
         transliteration: null,
-        selection: { in: "translation", start: 13, end: 21 },
+        commentary: null,
+        selection: { in: "translation", language: "en", start: 13, end: 21 },
       },
     });
 

@@ -83,6 +83,71 @@ describe("retrieve", () => {
 });
 
 /**
+ * "What does this mean?" shares wording with nothing, so the commentary on the very Ayah the reader
+ * is asking about — the passage sitting closest to their question — is the one lexical search is
+ * least likely to find. It is included because of what it is, not because it was searched for.
+ */
+describe("the Anchor Passage", () => {
+  const anchoredOn2_40 = (question: string, overrides = {}) =>
+    retrieverOver(overrides).retrieve(question, "en", { surah: 2, ayah: 40 });
+
+  it("is the tafsir on the Ayah the question is about, whatever the question shares no words with", async () => {
+    const found = await anchoredOn2_40("What does this mean?");
+
+    expect(found).toEqual([{ ref: { surah: 2, ayah: 40 }, kind: "tafsir", text: CORPUS[2].text }]);
+  });
+
+  it("leads the passages the search found, being the one certain to bear on the question", async () => {
+    const found = await anchoredOn2_40("In the name of Allah");
+
+    expect(found[0]).toMatchObject({ ref: { surah: 2, ayah: 40 }, kind: "tafsir" });
+    expect(found).toContainEqual({
+      ref: { surah: 1, ayah: 1 },
+      kind: "translation",
+      text: CORPUS[0].text,
+    });
+  });
+
+  it("is not brought back twice when the search finds it too", async () => {
+    const found = await anchoredOn2_40("Children of Israel");
+
+    expect(found.filter(({ kind }) => kind === "tafsir")).toHaveLength(1);
+  });
+
+  it("still counts against how many passages a question is grounded in", async () => {
+    const found = await anchoredOn2_40("Children of Israel Allah", { limit: 2 });
+
+    expect(found).toHaveLength(2);
+  });
+
+  // It is read straight out of the corpus, so a reader whose shard will not load is left with the
+  // one passage most likely to answer them rather than with none.
+  it("comes back even when the index will not load", async () => {
+    const found = await anchoredOn2_40("What does this mean?", {
+      loadIndex: async () => {
+        throw new Error("Failed to fetch");
+      },
+    });
+
+    expect(found.map(({ kind }) => kind)).toEqual(["tafsir"]);
+  });
+
+  // German has no tafsir edition, and a reader asking in a language the corpus has none in is a
+  // question grounded in what search finds rather than a question that fails.
+  it("is left out when the corpus has no commentary to read for it", async () => {
+    const found = await anchoredOn2_40("Children of Israel", {
+      readPassage: async (passage: PassageRef) => {
+        if (passage.kind === "tafsir") throw new Error("No tafsir in this language");
+        return textOf(passage) ?? "";
+      },
+    });
+
+    expect(found).not.toHaveLength(0);
+    expect(found.map(({ kind }) => kind)).not.toContain("tafsir");
+  });
+});
+
+/**
  * Retrieval makes an answer better grounded; it is not what makes an answer possible. A reader
  * whose index will not load should still get their question answered from the Verse Context alone,
  * so every failure here ends in fewer passages rather than in no answer.

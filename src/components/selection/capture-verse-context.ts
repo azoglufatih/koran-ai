@@ -1,5 +1,5 @@
-import type { VerseContext } from "@/ai/verse-context";
-import { ayahTextAround, otherAyahText, type AyahText } from "./ayah-marks";
+import type { AyahSelection, TranslatedText, VerseContext } from "@/ai/verse-context";
+import { ayahTextAround, ayahTextsFor, type AyahText } from "./ayah-marks";
 
 /**
  * Where the selection falls in its Ayah, counted in characters of the Ayah's own text rather than
@@ -16,17 +16,32 @@ function offsetsWithin(element: Element, range: Range) {
   return { start, end: start + range.toString().length };
 }
 
-const asTranslation = (found: AyahText | null) =>
-  found?.language ? { language: found.language, text: found.text } : null;
+/**
+ * The selection, naming the edition its offsets are counted in where more than one of that text can
+ * be on the page. Only a translation can be: a reader has one Arabic, and the Transliteration and
+ * the commentary are carried on the Verse Context itself, which names their editions there.
+ */
+function selectionIn(selected: AyahText, range: Range): AyahSelection | null {
+  const span = offsetsWithin(selected.element, range);
 
-const asTransliteration = (found: AyahText) =>
-  found.scheme ? { scheme: found.scheme, text: found.text } : null;
+  if (selected.role !== "translation") return { in: selected.role, ...span };
+  return selected.language ? { in: "translation", language: selected.language, ...span } : null;
+}
+
+const asTranslation = ({ language, text }: AyahText): TranslatedText | null =>
+  language ? { language, text } : null;
+
+const asTransliteration = ({ scheme, text }: AyahText) => (scheme ? { scheme, text } : null);
+
+const asCommentary = ({ source, language, text }: AyahText) =>
+  source && language ? { source, language, text } : null;
 
 /**
  * The Ayah a reader has selected words in, as they are reading it — the Arabic from the Reading
- * Pane and the translation from the Tab they are on, both taken off the page so that what the AI
- * is given is exactly what is in front of them. A reader who selected in the Transliteration
- * beneath the Arabic gets that carried too, since nothing else on the page would let them ask.
+ * Pane and every translation they have open, all taken off the page so that what the AI is given is
+ * exactly what is in front of them. A reader who selected in the Transliteration beneath the
+ * Arabic, or in a Tafsir Tab beside it, gets that carried too, since nothing else on the page would
+ * let them ask about those words.
  *
  * Null when there is no single Ayah to ground in: a selection spanning two of them, one outside
  * the Quran text, or a caret left behind after a click.
@@ -38,22 +53,28 @@ export function captureVerseContext(range: Range): VerseContext | null {
   if (!selected) return null;
 
   const page = selected.element.ownerDocument;
-  const arabic =
-    selected.role === "arabic" ? selected : otherAyahText(page, "arabic", selected.ref);
+  const [arabic] =
+    selected.role === "arabic" ? [selected] : ayahTextsFor(page, "arabic", selected.ref);
   // The Reading Pane is always on the page, so this is a can't-happen; grounding a question in a
   // translation with no Ayah behind it would be worse than not offering to ask at all.
   if (!arabic) return null;
 
+  const selection = selectionIn(selected, range);
+  if (!selection) return null;
+
   return {
     ref: selected.ref,
     arabic: arabic.text,
-    translation:
-      selected.role === "translation"
-        ? asTranslation(selected)
-        : asTranslation(otherAyahText(page, "translation", selected.ref)),
+    // Every Translation Tab open, whether or not it is the one showing — see `ayahTextsFor`.
+    translations: ayahTextsFor(page, "translation", selected.ref)
+      .map(asTranslation)
+      .filter((translation): translation is TranslatedText => translation !== null),
     // Carried only when the reader selected in it. Elsewhere on the page it is the same Arabic in
     // another script, which the model already has — see ADR 0005.
     transliteration: selected.role === "transliteration" ? asTransliteration(selected) : null,
-    selection: { in: selected.role, ...offsetsWithin(selected.element, range) },
+    // Likewise: commentary is one edition's reading of the Ayah, and a question that is not about
+    // that reading is not one to put it in front of the model for (ADR 0007).
+    commentary: selected.role === "tafsir" ? asCommentary(selected) : null,
+    selection,
   };
 }

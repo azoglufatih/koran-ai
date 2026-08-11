@@ -4,6 +4,7 @@ import type { Column } from "./column-arrangement";
 import { aiTab, tafsirTab, translationTab, type Tab } from "./tabs";
 import {
   COLUMN_ARRANGEMENT_KEY,
+  VERSION,
   readColumnArrangement,
   restoredColumns,
   writeColumnArrangement,
@@ -32,13 +33,22 @@ beforeEach(() => {
 
 const ARABIC = "يَٰبَنِىٓ إِسْرَٰٓءِيلَ ٱذْكُرُوا۟";
 const ENGLISH = "O Children of Israel! Remember";
+const COMMENTARY = "Allah reminds the Israelites of the favours He bestowed";
 
 const askingAbout2_40: VerseContext = {
   ref: { surah: 2, ayah: 40 },
   arabic: ARABIC,
-  translation: { language: "en", text: ENGLISH },
+  translations: [{ language: "en", text: ENGLISH }],
   transliteration: null,
-  selection: { in: "translation", start: 2, end: 20 },
+  commentary: null,
+  selection: { in: "translation", language: "en", start: 2, end: 20 },
+};
+
+/** A reader who marked words in a Tafsir Tab — a claim of that edition's, not the Ayah's own. */
+const askingAboutTheCommentary: VerseContext = {
+  ...askingAbout2_40,
+  commentary: { source: "al-mukhtasar", language: "en", text: COMMENTARY },
+  selection: { in: "tafsir", start: 4, end: 11 },
 };
 
 const column = (id: string, ...tabs: Tab[]): Column => ({ id, tabs, activeTabId: tabs[0].id });
@@ -96,7 +106,10 @@ describe("a restored AI Tab", () => {
 
     expect(restored.tabs[0]).toMatchObject({
       kind: "ai",
-      grounding: { ref: { surah: 2, ayah: 40 }, selection: { in: "translation", start: 2, end: 20 } },
+      grounding: {
+        ref: { surah: 2, ayah: 40 },
+        selection: { in: "translation", language: "en", start: 2, end: 20 },
+      },
     });
   });
 
@@ -110,7 +123,36 @@ describe("a restored AI Tab", () => {
     const [restored] = afterReload([column("column:1", aiTab(1, { verseContext: inTheTransliteration }))]);
 
     expect(restored.tabs[0]).toMatchObject({
-      grounding: { translationLanguage: "en", transliterationScheme: "tur-latinalphabet" },
+      grounding: { translationLanguages: ["en"], transliterationScheme: "tur-latinalphabet" },
+    });
+  });
+
+  // The Verse Context was taken from every Tab the reader had open, so restoring it from the one
+  // they happened to be looking at would ground their next question in less than the first.
+  it("keeps every translation the reader had open, not only the one they selected in", () => {
+    const comparing: VerseContext = {
+      ...askingAbout2_40,
+      translations: [
+        { language: "en", text: ENGLISH },
+        { language: "tr", text: "Ey İsrailoğulları!" },
+      ],
+    };
+
+    const [restored] = afterReload([column("column:1", aiTab(1, { verseContext: comparing }))]);
+
+    expect(restored.tabs[0]).toMatchObject({ grounding: { translationLanguages: ["en", "tr"] } });
+  });
+
+  it("keeps the tafsir a Commentary Selection was marked in, since it is a claim of that edition's", () => {
+    const [restored] = afterReload([
+      column("column:1", aiTab(1, { verseContext: askingAboutTheCommentary })),
+    ]);
+
+    expect(restored.tabs[0]).toMatchObject({
+      grounding: {
+        selection: { in: "tafsir", start: 4, end: 11 },
+        commentary: { source: "al-mukhtasar", language: "en" },
+      },
     });
   });
 
@@ -141,12 +183,17 @@ describe("a restored AI Tab", () => {
 describe("what is written down", () => {
   it("holds no corpus text — references, offsets and codes only", () => {
     writeColumnArrangement(storage, [
-      column("column:1", translationTab("en"), aiTab(1, { verseContext: askingAbout2_40 })),
+      column(
+        "column:1",
+        translationTab("en"),
+        aiTab(1, { verseContext: askingAboutTheCommentary }),
+      ),
     ]);
 
     const written = JSON.stringify(stored());
     expect(written).not.toContain(ARABIC);
     expect(written).not.toContain(ENGLISH);
+    expect(written).not.toContain(COMMENTARY);
     expect(written).toContain("2");
     expect(written).toContain("en");
   });
@@ -169,14 +216,14 @@ describe("stored state this version cannot read", () => {
   // A record from another version is dropped rather than guessed at: a workspace the reader never
   // arranged is a smaller loss than one restored wrong.
   it("is dropped whole when it was written by another version", () => {
-    putStored({ version: 99, columns: [{ tabs: [{ kind: "translation", language: "en" }], showing: 0 }] });
+    putStored({ version: VERSION + 1, columns: [{ tabs: [{ kind: "translation", language: "en" }], showing: 0 }] });
 
     expect(readColumnArrangement(storage)).toBeNull();
   });
 
   it("costs the reader one Tab rather than the workspace they built", () => {
     putStored({
-      version: 1,
+      version: VERSION,
       columns: [
         {
           tabs: [
@@ -198,7 +245,7 @@ describe("stored state this version cannot read", () => {
 
   it("drops a Column whose every Tab was unreadable, since a Column closes with its last Tab", () => {
     putStored({
-      version: 1,
+      version: VERSION,
       columns: [
         { tabs: [{ kind: "translation", language: "kl" }], showing: 0 },
         { tabs: [{ kind: "translation", language: "tr" }], showing: 0 },
@@ -212,7 +259,7 @@ describe("stored state this version cannot read", () => {
 
   it("falls back to the first Tab when the one it says was showing is not there", () => {
     putStored({
-      version: 1,
+      version: VERSION,
       columns: [{ tabs: [{ kind: "translation", language: "en" }], showing: 4 }],
     });
 
@@ -222,7 +269,7 @@ describe("stored state this version cannot read", () => {
   // Half a grounding would label a Tab after an Ayah while grounding the next question elsewhere.
   it("keeps an AI Tab but drops a grounding it cannot read whole", () => {
     putStored({
-      version: 1,
+      version: VERSION,
       columns: [
         {
           tabs: [
@@ -245,7 +292,39 @@ describe("stored state this version cannot read", () => {
 
   it("keeps a grounding whose every edition it can name", () => {
     putStored({
-      version: 1,
+      version: VERSION,
+      columns: [
+        {
+          tabs: [
+            {
+              kind: "ai",
+              grounding: {
+                ref: { surah: 2, ayah: 40 },
+                selection: { in: "translation", language: "en", start: 2, end: 20 },
+                translationLanguages: ["en"],
+                transliterationScheme: null,
+                commentary: null,
+              },
+            },
+          ],
+          showing: 0,
+        },
+      ],
+    });
+
+    expect(readColumnArrangement(storage)?.[0].tabs[0]).toMatchObject({
+      grounding: { translationLanguages: ["en"] },
+    });
+  });
+
+  /**
+   * The grounding gained fields rather than a version, so a reader who asked a question before
+   * this shipped comes back to the conversation they left rather than to an empty workspace: the
+   * one translation the old record names is the one its offsets were counted in.
+   */
+  it("reads a grounding written before a reader could have several translations open", () => {
+    putStored({
+      version: VERSION,
       columns: [
         {
           tabs: [
@@ -264,9 +343,81 @@ describe("stored state this version cannot read", () => {
       ],
     });
 
-    expect(readColumnArrangement(storage)?.[0].tabs[0]).toMatchObject({
-      grounding: { translationLanguage: "en" },
+    expect(readColumnArrangement(storage)?.[0].tabs[0]).toEqual({
+      kind: "ai",
+      grounding: {
+        ref: { surah: 2, ayah: 40 },
+        selection: { in: "translation", language: "en", start: 2, end: 20 },
+        translationLanguages: ["en"],
+        transliterationScheme: null,
+        commentary: null,
+      },
     });
+  });
+
+  /**
+   * Unattributed, a marked span of tafsir is a claim about the Ayah with nobody making it — so a
+   * record that cannot name the edition loses the grounding rather than restoring the words against
+   * whichever tafsir the reader has open now (docs/adr/0007-commentary-selection-is-a-claim.md).
+   */
+  it("drops a Commentary Selection it cannot name the edition for", () => {
+    const groundedIn = (commentary: unknown) => ({
+      kind: "ai",
+      grounding: {
+        ref: { surah: 2, ayah: 40 },
+        selection: { in: "tafsir", start: 4, end: 11 },
+        translationLanguages: [],
+        transliterationScheme: null,
+        commentary,
+      },
+    });
+
+    putStored({
+      version: VERSION,
+      columns: [
+        {
+          tabs: [
+            groundedIn(null),
+            groundedIn({ source: "not-a-tafsir", language: "en" }),
+            groundedIn({ source: "al-mukhtasar", language: "kl" }),
+          ],
+          showing: 0,
+        },
+      ],
+    });
+
+    expect(readColumnArrangement(storage)?.[0].tabs).toEqual([
+      { kind: "ai", grounding: null },
+      { kind: "ai", grounding: null },
+      { kind: "ai", grounding: null },
+    ]);
+  });
+
+  // The offsets were counted in one edition and mean nothing in another, so a selection naming a
+  // translation the record does not say the reader had open is a selection into no text at all.
+  it("drops a grounding whose selection was made in a translation it does not list", () => {
+    putStored({
+      version: VERSION,
+      columns: [
+        {
+          tabs: [
+            {
+              kind: "ai",
+              grounding: {
+                ref: { surah: 2, ayah: 40 },
+                selection: { in: "translation", language: "tr", start: 2, end: 20 },
+                translationLanguages: ["en"],
+                transliterationScheme: null,
+                commentary: null,
+              },
+            },
+          ],
+          showing: 0,
+        },
+      ],
+    });
+
+    expect(readColumnArrangement(storage)?.[0].tabs[0]).toEqual({ kind: "ai", grounding: null });
   });
 
   it("keeps only the first of a Tab named twice, which cannot be in two Columns at once", () => {

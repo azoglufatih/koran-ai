@@ -7,10 +7,11 @@ import type { VerseContext } from "./verse-context";
 const ASKING_ABOUT_2_45: VerseContext = {
   ref: { surah: 2, ayah: 45 },
   arabic: "وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ",
-  translation: { language: "en", text: "Seek help in steadfastness and prayer" },
+  translations: [{ language: "en", text: "Seek help in steadfastness and prayer" }],
   transliteration: null,
+  commentary: null,
   // The reader has selected "steadfastness".
-  selection: { in: "translation", start: 13, end: 26 },
+  selection: { in: "translation", language: "en", start: 13, end: 26 },
 };
 
 describe("retrievalQuestion", () => {

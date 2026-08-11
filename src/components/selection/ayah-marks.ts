@@ -1,8 +1,10 @@
 import { AYAH_TEXT_ROLES, type AyahTextRole } from "@/ai/verse-context";
 import {
+  isTafsirSource,
   isTranslationLanguage,
   isTransliterationScheme,
   type AyahRef,
+  type TafsirSource,
   type TranslationLanguage,
   type TransliterationScheme,
 } from "@/content/quran";
@@ -20,9 +22,7 @@ const ROLE_MARK = "data-ayah-role";
 const AYAH_MARK = "data-ayah";
 const LANGUAGE_MARK = "data-ayah-language";
 const SCHEME_MARK = "data-ayah-scheme";
-
-/** The Tab the reader is looking at, of the several that can be on screen at once. */
-const ACTIVE_TAB_MARK = "data-tab-active";
+const SOURCE_MARK = "data-ayah-source";
 
 const ayahMark = (ref: AyahRef) => `${ref.surah}:${ref.ayah}`;
 
@@ -55,18 +55,33 @@ export const transliterationAyahMarks = (ref: AyahRef, scheme: TransliterationSc
   [SCHEME_MARK]: scheme,
 });
 
-/** Marks the Tab the reader is on, so a selection knows which translation they can see. */
-export const activeTabMarks = (isActive: boolean) => (isActive ? { [ACTIVE_TAB_MARK]: "" } : {});
+/**
+ * Marks for a Tafsir Tab's commentary. It names both its source and its language: a span of tafsir
+ * is a claim the edition it came from is making, so nothing downstream may carry it without being
+ * able to say whose claim it is (ADR 0007).
+ */
+export const tafsirAyahMarks = (
+  ref: AyahRef,
+  source: TafsirSource,
+  language: TranslationLanguage,
+) => ({
+  [ROLE_MARK]: "tafsir",
+  [AYAH_MARK]: ayahMark(ref),
+  [SOURCE_MARK]: source,
+  [LANGUAGE_MARK]: language,
+});
 
 /** One Ayah's text as it stands on the page, found through the marks above. */
 export interface AyahText {
   element: Element;
   role: AyahTextRole;
   ref: AyahRef;
-  /** The translation's language; null for the other two, neither of which names one. */
+  /** The translation's or the commentary's language; null for the texts that name none. */
   language: TranslationLanguage | null;
-  /** The Transliteration's scheme; null for the other two, neither of which names one. */
+  /** The Transliteration's scheme; null for the texts that name none. */
   scheme: TransliterationScheme | null;
+  /** The commentary's tafsir; null for the texts that are the Ayah itself rather than about it. */
+  source: TafsirSource | null;
   text: string;
 }
 
@@ -83,6 +98,11 @@ function readScheme(element: Element): TransliterationScheme | null {
   return isTransliterationScheme(mark) ? mark : null;
 }
 
+function readSource(element: Element): TafsirSource | null {
+  const mark = element.getAttribute(SOURCE_MARK);
+  return isTafsirSource(mark) ? mark : null;
+}
+
 function readMarks(element: Element | null): AyahText | null {
   const role = element?.getAttribute(ROLE_MARK) ?? null;
   const ref = element && parseAyahMark(element.getAttribute(AYAH_MARK));
@@ -93,10 +113,13 @@ function readMarks(element: Element | null): AyahText | null {
   // Arabic names no edition and needs none — there is one of it.
   const language = readLanguage(element);
   const scheme = readScheme(element);
+  const source = readSource(element);
   if (role === "translation" && !language) return null;
   if (role === "transliteration" && !scheme) return null;
+  // Commentary needs both: unattributed, it is a claim about the Ayah with nobody making it.
+  if (role === "tafsir" && !(source && language)) return null;
 
-  return { element, role, ref, language, scheme, text: element.textContent ?? "" };
+  return { element, role, ref, language, scheme, source, text: element.textContent ?? "" };
 }
 
 /** The Ayah text a node sits inside, or null for a node outside any — a heading, a Tab strip. */
@@ -115,20 +138,18 @@ export function arabicAyahTexts(root: ParentNode): AyahText[] {
     .filter((found): found is AyahText => found !== null);
 }
 
-const ayahTextSelector = (role: AyahTextRole, ref: AyahRef) =>
-  `[${ROLE_MARK}="${role}"][${AYAH_MARK}="${ayahMark(ref)}"]`;
-
 /**
- * The same Ayah rendered as the other text — the Arabic behind a translation a reader selected in,
- * or the translation beside the Arabic. Several Translation Tabs can be open on the same Ayah, so
- * the one in the Tab the reader is looking at wins; failing that, the first the page renders.
+ * Every rendering of one Ayah in one role that is on the page, in the order it renders them — the
+ * Arabic behind a translation the reader selected in, or all the translations beside the Arabic.
+ *
+ * All of them, and not the one the reader is looking at: whether a Tab is showing depends on the
+ * width of the screen, so grounding in what is visible would answer the same question differently
+ * on a phone and on a laptop.
  */
-export function otherAyahText(
-  root: ParentNode,
-  role: AyahTextRole,
-  ref: AyahRef,
-): AyahText | null {
-  const selector = ayahTextSelector(role, ref);
-  const inTabOnScreen = root.querySelector(`[${ACTIVE_TAB_MARK}] ${selector}`);
-  return readMarks(inTabOnScreen ?? root.querySelector(selector));
+export function ayahTextsFor(root: ParentNode, role: AyahTextRole, ref: AyahRef): AyahText[] {
+  const rendered = root.querySelectorAll(
+    `[${ROLE_MARK}="${role}"][${AYAH_MARK}="${ayahMark(ref)}"]`,
+  );
+
+  return [...rendered].map(readMarks).filter((found): found is AyahText => found !== null);
 }

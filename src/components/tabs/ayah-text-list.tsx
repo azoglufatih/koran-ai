@@ -4,9 +4,10 @@ import type { AyahRef } from "@/content/quran";
  * One piece of text per Ayah, numbered — how a Translation Tab and a Tafsir Tab both read, so the
  * Ayah a reader is looking at lines up across whichever Tabs they have open.
  *
- * `ayahMarks` is how a Tab whose text a reader can ask about says so: a Translation Tab stamps
- * each Ayah so a selection in it can be traced back, and a Tafsir Tab — which is commentary about
- * an Ayah rather than the Ayah itself — passes nothing.
+ * `ayahMarks` is how a Tab whose text a reader can ask about says so: it stamps each Ayah with what
+ * a selection in it has to be traced back through. A Translation Tab names its language; a Tafsir
+ * Tab names its source as well, because what a reader marks there is a claim about the Ayah rather
+ * than the Ayah itself, and carrying it means being able to say whose claim it is (ADR 0007).
  */
 export function AyahTextList({
   ayahs,

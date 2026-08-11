@@ -7,6 +7,7 @@ const ARABIC = "يَٰبَنِىٓ إِسْرَٰٓءِيلَ ٱذْكُرُوا
 const ENGLISH = "O Children of Israel! Remember My favour";
 const TURKISH = "Ey İsrailoğulları! Size verdiğim nimeti hatırlayın";
 const LATIN = "Yā Banī 'Isrā'īla Adhkurū Ni`matiya";
+const COMMENTARY = "Allah reminds the Israelites of the favours He bestowed on their forefathers";
 const SCHEME = "ara-quranphoneticst";
 
 const inTransliteration = "[data-ayah-role='transliteration']";
@@ -34,7 +35,13 @@ const translationTab = (language: string, text: string, isActive: boolean) => `
     <p data-ayah-role="translation" data-ayah-language="${language}" data-ayah="2:40">${text}</p>
   </article>`;
 
+const tafsirTab = (source: string, language: string, text = COMMENTARY) => `
+  <article>
+    <p data-ayah-role="tafsir" data-ayah-source="${source}" data-ayah-language="${language}" data-ayah="2:40">${text}</p>
+  </article>`;
+
 const inTranslationTab = "[data-ayah-role='translation']";
+const inTafsirTab = "[data-ayah-role='tafsir']";
 
 /** The reader dragging across a phrase, as a Range — what a Selection hands back. */
 function selecting(words: string, within = "[data-ayah-role='arabic']") {
@@ -62,22 +69,40 @@ describe("a selection in the Reading Pane", () => {
   it("carries the translation the reader has open beside it", () => {
     const context = captureVerseContext(selecting("إِسْرَٰٓءِيلَ"));
 
-    expect(context?.translation).toEqual({ language: "en", text: ENGLISH });
+    expect(context?.translations).toEqual([{ language: "en", text: ENGLISH }]);
   });
 
   it("carries no translation when the reader is reading Arabic only", () => {
     page("");
 
-    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translation).toBeNull();
+    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translations).toEqual([]);
   });
+});
 
-  it("takes the translation from the Tab the reader is looking at", () => {
+/**
+ * Which Tab is showing depends on the width of the screen — a Column shows one Tab at a time on a
+ * laptop, and below that the whole workspace is one swipeable strip. Grounding in what is visible
+ * would answer the same question differently on the reader's phone and their laptop.
+ */
+describe("a reader with two Translation Tabs open", () => {
+  it("carries both, whichever of them is the one on screen", () => {
     page(translationTab("en", ENGLISH, false) + translationTab("tr", TURKISH, true));
 
-    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translation).toEqual({
-      language: "tr",
-      text: TURKISH,
-    });
+    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translations).toEqual([
+      { language: "en", text: ENGLISH },
+      { language: "tr", text: TURKISH },
+    ]);
+  });
+
+  it("names the one the selection was made in, since offsets mean nothing in the other", () => {
+    page(translationTab("en", ENGLISH, false) + translationTab("tr", TURKISH, true));
+
+    const context = captureVerseContext(
+      selecting("İsrailoğulları", `${inTranslationTab}[data-ayah-language='tr']`),
+    );
+
+    expect(context?.selection).toMatchObject({ in: "translation", language: "tr" });
+    expect(selectedText(context!)).toBe("İsrailoğulları");
   });
 });
 
@@ -111,16 +136,76 @@ describe("a selection in the Transliteration", () => {
   it("carries the translation the reader has open beside it", () => {
     const context = captureVerseContext(selecting("'Isrā'īla", inTransliteration));
 
-    expect(context?.translation).toEqual({ language: "en", text: ENGLISH });
+    expect(context?.translations).toEqual([{ language: "en", text: ENGLISH }]);
   });
 });
 
-// It says nothing the Arabic does not already say, so it goes only with a question about itself.
+/**
+ * A span of tafsir is a commentator's claim *about* the Ayah rather than another rendering of it,
+ * so it is carried attributed to the edition it came from and never as the Ayah's own words
+ * (docs/adr/0007-commentary-selection-is-a-claim.md).
+ */
+describe("a Commentary Selection", () => {
+  beforeEach(() => {
+    page(translationTab("en", ENGLISH, false) + tafsirTab("al-mukhtasar", "en"));
+  });
+
+  it("is grounded in the Ayah the commentary is about, which the reader has beside it", () => {
+    const context = captureVerseContext(selecting("favours", inTafsirTab));
+
+    expect(context).toMatchObject({ ref: { surah: 2, ayah: 40 }, arabic: ARABIC });
+    expect(selectedText(context!)).toBe("favours");
+  });
+
+  it("carries the commentary named for the edition it came from", () => {
+    const context = captureVerseContext(selecting("favours", inTafsirTab));
+
+    expect(context?.commentary).toEqual({
+      source: "al-mukhtasar",
+      language: "en",
+      text: COMMENTARY,
+    });
+    expect(context?.selection.in).toBe("tafsir");
+  });
+
+  it("carries the Ayah's own renderings too, so the claim can be read against the text", () => {
+    const context = captureVerseContext(selecting("favours", inTafsirTab));
+
+    expect(context?.arabic).toBe(ARABIC);
+    expect(context?.translations).toEqual([{ language: "en", text: ENGLISH }]);
+  });
+
+  // Unattributed, it is a claim about the Ayah with nobody making it — which is the one thing the
+  // model must never be handed.
+  it("is ignored when the commentary names no source this version knows", () => {
+    page(tafsirTab("made-up-tafsir", "en"));
+
+    expect(captureVerseContext(selecting("favours", inTafsirTab))).toBeNull();
+  });
+
+  it("is ignored when the commentary names no language it can read", () => {
+    page(tafsirTab("al-mukhtasar", "kl"));
+
+    expect(captureVerseContext(selecting("favours", inTafsirTab))).toBeNull();
+  });
+});
+
+// The Transliteration says nothing the Arabic does not, and the commentary is somebody else's
+// reading of it — so each goes only with a question about itself.
 describe("a selection anywhere else", () => {
   it("carries no Transliteration, even with the line on the page", () => {
     expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.transliteration).toBeNull();
     expect(
       captureVerseContext(selecting("Children of Israel", inTranslationTab))?.transliteration,
+    ).toBeNull();
+  });
+
+  it("carries no commentary, even with a Tafsir Tab open", () => {
+    page(translationTab("en", ENGLISH, true) + tafsirTab("al-mukhtasar", "en"), false);
+
+    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.commentary).toBeNull();
+    expect(
+      captureVerseContext(selecting("Children of Israel", inTranslationTab))?.commentary,
     ).toBeNull();
   });
 
@@ -130,7 +215,8 @@ describe("a selection anywhere else", () => {
     expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))).toMatchObject({
       arabic: ARABIC,
       transliteration: null,
-      translation: { language: "en", text: ENGLISH },
+      commentary: null,
+      translations: [{ language: "en", text: ENGLISH }],
     });
   });
 });
@@ -146,7 +232,7 @@ describe("a selection in a Translation Tab", () => {
   it("marks the selection in the translation rather than in the Arabic", () => {
     const context = captureVerseContext(selecting("Children of Israel", inTranslationTab));
 
-    expect(context?.selection.in).toBe("translation");
+    expect(context?.selection).toMatchObject({ in: "translation", language: "en" });
   });
 
   it("measures across the whole Ayah, however the Tab happens to mark its text up", () => {
@@ -162,7 +248,7 @@ describe("a selection in a Translation Tab", () => {
     range.setEnd(emphasised, "Children of Israel".length);
 
     const context = captureVerseContext(range);
-    expect(context?.translation?.text).toBe(ENGLISH);
+    expect(context?.translations).toEqual([{ language: "en", text: ENGLISH }]);
     expect(selectedText(context!)).toBe("Children of Israel");
   });
 });
@@ -195,7 +281,7 @@ describe("selections there is nothing to ask about", () => {
 
     expect(captureVerseContext(selecting("Children of Israel", inTranslationTab))).toBeNull();
     // Nor is it quietly attached to a selection made in the Arabic beside it.
-    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translation).toBeNull();
+    expect(captureVerseContext(selecting("إِسْرَٰٓءِيلَ"))?.translations).toEqual([]);
   });
 
   it("ignores a selection of nothing but whitespace", () => {

@@ -143,6 +143,20 @@ export const TAFSIR_SOURCES = ["al-mukhtasar"] as const;
 
 export type TafsirSource = (typeof TAFSIR_SOURCES)[number];
 
+/** Whether a value read back out of storage or off the page names a source this version ships. */
+export const isTafsirSource = (value: unknown): value is TafsirSource =>
+  TAFSIR_SOURCES.includes(value as TafsirSource);
+
+/**
+ * Each tafsir's name in a form that does not depend on which language's edition is open — what a
+ * Commentary Selection is attributed to, both to the model and in the Grounding Notice (ADR 0007).
+ * The editions carry their own names too ("Muhtasar Tefsir"), which is what a Tafsir Tab credits;
+ * this is the one name that identifies the commentary whichever edition of it a reader has open.
+ */
+export const TAFSIR_SOURCE_NAMES: Record<TafsirSource, string> = {
+  "al-mukhtasar": "Al-Mukhtasar fi Tafsir al-Quran al-Karim",
+};
+
 /**
  * One tafsir source in one language. Tafsir is keyed by the same reader languages as translations,
  * but is not available in all of them — see `SurahTafsir`.

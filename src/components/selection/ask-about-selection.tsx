@@ -24,8 +24,8 @@ function askingAboutSelection(): Asking | null {
 }
 
 /**
- * The way into a grounded conversation: select words in the Reading Pane or a Translation Tab, and
- * the question you can ask about them comes to you.
+ * The way into a grounded conversation: select words in the Reading Pane, a Translation Tab or a
+ * Tafsir Tab, and the question you can ask about them comes to you.
  *
  * Mounted once for the page rather than per Ayah — the Reading Pane is prerendered on the server,
  * and a selection can start in it and finish in a Tab, so one listener over the whole document is
