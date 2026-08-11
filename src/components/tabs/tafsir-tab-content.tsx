@@ -1,5 +1,6 @@
 "use client";
 
+import { tafsirAyahMarks } from "@/components/selection/ayah-marks";
 import { quranContent } from "@/content/bundled-quran";
 import type { SurahTafsir, TafsirSource, TranslationLanguage } from "@/content/quran";
 import { AyahTextList } from "./ayah-text-list";
@@ -25,7 +26,15 @@ export function TafsirTabContent({
       {(tafsir: SurahTafsir) =>
         tafsir.available ? (
           <div lang={tafsir.edition.language}>
-            <AyahTextList ayahs={tafsir.ayahs} />
+            {/* Marked so a reader can select here and ask, the way they can in the Arabic and a
+                translation — and marked with the source as well as the language, so what they
+                selected can be carried as this edition's claim rather than as the Ayah's words. */}
+            <AyahTextList
+              ayahs={tafsir.ayahs}
+              ayahMarks={(ref) =>
+                tafsirAyahMarks(ref, tafsir.edition.source, tafsir.edition.language)
+              }
+            />
 
             <p className="mt-4 text-xs text-black/45 dark:text-white/45">
               {tafsir.edition.name} —{" "}

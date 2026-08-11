@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { aiClient } from "@/ai/browser-ai-client";
 import type { ChatMessage } from "@/ai/ai-client";
-import { selectedText, type VerseContext } from "@/ai/verse-context";
+import type { VerseContext } from "@/ai/verse-context";
+import type { TranslationLanguage } from "@/content/quran";
 import { ProviderSettings } from "@/components/ai/provider-settings";
 import { useAiProviderConfig } from "@/components/ai/use-ai-provider-config";
+import { GroundingNotice } from "./grounding-notice";
 import { LoadedTabContent } from "./loaded-tab-content";
 import { restoreVerseContext } from "./restore-verse-context";
 import { RetryNotice } from "./retry-notice";
@@ -32,7 +34,9 @@ export function AiTabContent({ tab }: { tab: AiTab }) {
       load={() => restoreVerseContext(grounding)}
       loadingLabel="Reading the Ayah this conversation is about…"
     >
-      {(verseContext) => <AiConversation verseContext={verseContext} />}
+      {/* Null when the corpus no longer has the text the offsets were counted in — the conversation
+          comes back open-ended rather than grounded in words nobody selected. */}
+      {(verseContext) => <AiConversation verseContext={verseContext ?? undefined} />}
     </LoadedTabContent>
   );
 }
@@ -94,14 +98,14 @@ function AiConversation({ verseContext }: { verseContext?: VerseContext }) {
   // see which words they are about to ask about while they do it.
   if (!config) {
     return (
-      <AiTabLayout verseContext={verseContext}>
+      <AiTabLayout verseContext={verseContext} language={readerLanguage}>
         <UnconfiguredTab />
       </AiTabLayout>
     );
   }
 
   return (
-    <AiTabLayout verseContext={verseContext}>
+    <AiTabLayout verseContext={verseContext} language={readerLanguage}>
       <ActiveProvider />
 
       {messages.length === 0 ? (
@@ -156,42 +160,17 @@ function AiConversation({ verseContext }: { verseContext?: VerseContext }) {
 /** An AI Tab, whatever state it is in, under the Ayah it is grounded in. */
 function AiTabLayout({
   verseContext,
+  language,
   children,
 }: {
   verseContext?: VerseContext;
+  language: TranslationLanguage | null;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 py-2">
-      {verseContext && <GroundedIn context={verseContext} />}
+      {verseContext && <GroundingNotice context={verseContext} language={language} />}
       {children}
-    </div>
-  );
-}
-
-/**
- * What the conversation is anchored to, kept in front of the reader: the words they selected, and
- * a plain statement that the whole Ayah goes with them. Nothing is sent anywhere the reader hasn't
- * configured themselves, so what *is* sent is worth saying out loud.
- */
-function GroundedIn({ context }: { context: VerseContext }) {
-  const inArabic = context.selection.in === "arabic";
-
-  return (
-    <div className="rounded-lg border border-black/10 px-3 py-2 dark:border-white/10">
-      <p className="text-xs text-black/45 dark:text-white/45">
-        Asking about Ayah {context.ref.surah}:{context.ref.ayah}
-      </p>
-      <p
-        dir={inArabic ? "rtl" : undefined}
-        lang={inArabic ? "ar" : context.translation?.language}
-        className={`mt-1 text-sm ${inArabic ? "font-arabic text-lg leading-loose" : ""}`}
-      >
-        &ldquo;{selectedText(context)}&rdquo;
-      </p>
-      <p className="mt-1 text-xs text-black/45 dark:text-white/45">
-        The whole Ayah goes with your question, so the answer has its context.
-      </p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import {
-  TAFSIR_SOURCES,
+  isTafsirSource,
   isTranslationLanguage,
   isTransliterationScheme,
   parseAyahRef,
@@ -32,17 +32,32 @@ export const COLUMN_ARRANGEMENT_KEY = "koran-ai:columns";
  * Bumped when the shape below changes in a way an older record cannot be read as. A record from
  * another version is dropped rather than guessed at: a workspace the reader never arranged is a
  * smaller loss than one restored wrong.
+ *
+ * Still 1: a grounding has gained fields — every translation the reader had open, and the edition
+ * a Commentary Selection was marked in — and `parseGrounding` reads a record without them as the
+ * one translation it does name. Growing fields costs a reader nothing; bumping would cost every
+ * reader the workspace they built, for a record this version can still read whole.
  */
-const VERSION = 1;
+export const VERSION = 1;
 
 /** Everything an AI Tab's grounding needs, once the corpus has been asked for the texts. */
 export interface StoredGrounding {
   ref: AyahRef;
   selection: AyahSelection;
-  /** The Translation Tab the reader had open when they asked, if any. */
-  translationLanguage: TranslationLanguage | null;
+  /**
+   * Every Translation Tab the reader had open when they asked — the same "open, not showing" the
+   * Verse Context itself was taken from, so a restored conversation grounds in what the first
+   * question did rather than in whichever Tab was in front.
+   */
+  translationLanguages: TranslationLanguage[];
   /** The scheme they were reading, when the Transliteration is where they selected. */
   transliterationScheme: TransliterationScheme | null;
+  /**
+   * The edition a Commentary Selection was marked in, when that is where they selected. Both the
+   * source and its language: the offsets were counted in one edition's words and mean nothing in
+   * another's (docs/adr/0007-commentary-selection-is-a-claim.md).
+   */
+  commentary: { source: TafsirSource; language: TranslationLanguage } | null;
 }
 
 type StoredTab =
@@ -65,8 +80,11 @@ interface StoredArrangement {
 export const groundingOf = (context: VerseContext): StoredGrounding => ({
   ref: context.ref,
   selection: context.selection,
-  translationLanguage: context.translation?.language ?? null,
+  translationLanguages: context.translations.map(({ language }) => language),
   transliterationScheme: context.transliteration?.scheme ?? null,
+  commentary: context.commentary
+    ? { source: context.commentary.source, language: context.commentary.language }
+    : null,
 });
 
 const storedTab = (tab: Tab): StoredTab => {
@@ -101,7 +119,10 @@ export function writeColumnArrangement(storage: Storage | null, columns: readonl
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-function parseSelection(value: unknown): AyahSelection | null {
+function parseSelection(
+  value: unknown,
+  translationLanguages: readonly TranslationLanguage[],
+): AyahSelection | null {
   if (!isRecord(value)) return null;
   const { in: role, start, end } = value;
 
@@ -110,8 +131,29 @@ function parseSelection(value: unknown): AyahSelection | null {
   // A backwards or negative span would mark nothing, or mark the whole Ayah by accident.
   if ((start as number) < 0 || (end as number) < (start as number)) return null;
 
-  return { in: role as AyahTextRole, start: start as number, end: end as number };
+  const span = { start: start as number, end: end as number };
+  // A reader can have several translations open and the offsets were counted in one of them, so a
+  // selection that does not say which is a span of no text this version can find — unless the
+  // record names exactly one translation, which is what a record written before they could have
+  // several looks like, and then that is the one they were counted in.
+  if (role === "translation") {
+    const language = isTranslationLanguage(value.language)
+      ? value.language
+      : (translationLanguages.length === 1 && translationLanguages[0]) || null;
+
+    return language ? { in: "translation", language, ...span } : null;
+  }
+
+  return { in: role as Exclude<AyahTextRole, "translation">, ...span };
 }
+
+const parseCommentary = (value: unknown) => {
+  if (!isRecord(value)) return null;
+
+  return isTafsirSource(value.source) && isTranslationLanguage(value.language)
+    ? { source: value.source, language: value.language }
+    : null;
+};
 
 /**
  * A grounding that cannot be read whole is dropped rather than half-restored: an AI Tab labelled
@@ -121,27 +163,36 @@ function parseSelection(value: unknown): AyahSelection | null {
 function parseGrounding(value: unknown): StoredGrounding | null {
   if (!isRecord(value)) return null;
 
+  // A language this version no longer ships is a translation there is nothing to read back, so it
+  // drops out of the grounding the way a Tab in it would drop out of the workspace. `translation-
+  // Language` is where a record written before a reader could have several open kept the one.
+  const translationLanguages = (
+    Array.isArray(value.translationLanguages)
+      ? value.translationLanguages
+      : [value.translationLanguage]
+  ).filter((language) => isTranslationLanguage(language));
+
   const ref = parseAyahRef(value.ref);
-  const selection = parseSelection(value.selection);
+  const selection = parseSelection(value.selection, translationLanguages);
   if (!ref || !selection) return null;
 
-  // Every text the selection could have been made in has to be nameable, or the offsets point into
-  // something this version cannot read back out of the corpus.
-  const translationLanguage = isTranslationLanguage(value.translationLanguage)
-    ? value.translationLanguage
-    : null;
   const transliterationScheme = isTransliterationScheme(value.transliterationScheme)
     ? value.transliterationScheme
     : null;
+  const commentary = parseCommentary(value.commentary);
 
-  if (selection.in === "translation" && !translationLanguage) return null;
+  // Every text the selection could have been made in has to be nameable, or the offsets point into
+  // something this version cannot read back out of the corpus.
+  if (selection.in === "translation" && !translationLanguages.includes(selection.language)) {
+    return null;
+  }
   if (selection.in === "transliteration" && !transliterationScheme) return null;
+  // Unattributed, a marked span of tafsir is a claim about the Ayah with nobody making it (ADR
+  // 0007) — so this is dropped rather than restored against whichever tafsir is open now.
+  if (selection.in === "tafsir" && !commentary) return null;
 
-  return { ref, selection, translationLanguage, transliterationScheme };
+  return { ref, selection, translationLanguages, transliterationScheme, commentary };
 }
-
-const isTafsirSource = (value: unknown): value is TafsirSource =>
-  TAFSIR_SOURCES.includes(value as TafsirSource);
 
 function parseTab(value: unknown): StoredTab | null {
   if (!isRecord(value)) return null;

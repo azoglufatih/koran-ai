@@ -99,6 +99,21 @@ const groundedConversation = (
 ];
 
 /**
+ * The Ayah retrieval should anchor on: the one the question is about, so the commentary on it is
+ * guaranteed rather than left to a search that may share no word with the question.
+ *
+ * None when the reader marked their selection in the very commentary the anchor would be — the
+ * edition retrieval reads is the one in the language being searched, so it is the same words a
+ * second time, in the plainer voice the Verse Context's framing exists to keep them out of
+ * (docs/adr/0007-commentary-selection-is-a-claim.md). A Commentary Selection made in *another*
+ * language's edition is a different reading of the Ayah, and worth having beside the reader's.
+ */
+export const anchorFor = (
+  verseContext: VerseContext | undefined,
+  language: TranslationLanguage,
+) => (verseContext?.commentary?.language === language ? undefined : verseContext?.ref);
+
+/**
  * The one path every provider's answers come back through. Nothing above this knows which provider
  * the reader configured — only that a question goes in and an answer comes out.
  *
@@ -126,7 +141,11 @@ export function createAiClient({
     if (!language) return [];
 
     try {
-      return await retriever.retrieve(retrievalQuestion(messages, verseContext), language);
+      return await retriever.retrieve(
+        retrievalQuestion(messages, verseContext),
+        language,
+        anchorFor(verseContext, language),
+      );
     } catch {
       return [];
     }

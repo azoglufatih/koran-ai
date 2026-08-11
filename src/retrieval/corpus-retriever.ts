@@ -1,4 +1,4 @@
-import type { TranslationLanguage } from "@/content/quran";
+import type { AyahRef, TranslationLanguage } from "@/content/quran";
 import { searchIndex, type PassageRef, type RetrievalIndex } from "./retrieval-index";
 
 /** A passage retrieval found, with the corpus's own words — never the folded terms it matched on. */
@@ -7,8 +7,18 @@ export interface RetrievedPassage extends PassageRef {
 }
 
 export interface CorpusRetriever {
-  /** The passages worth putting in front of the model for this question, best first. */
-  retrieve(question: string, language: TranslationLanguage): Promise<RetrievedPassage[]>;
+  /**
+   * The passages worth putting in front of the model for this question, best first.
+   *
+   * `about` is the Ayah the reader is asking about, when they asked from a selection. It is what
+   * lets retrieval guarantee an Anchor Passage rather than leave the commentary on that very Ayah
+   * to a search that is least likely to find it.
+   */
+  retrieve(
+    question: string,
+    language: TranslationLanguage,
+    about?: AyahRef,
+  ): Promise<RetrievedPassage[]>;
 }
 
 export interface CorpusRetrieverSources {
@@ -62,22 +72,41 @@ export function createCorpusRetriever({
     return loading;
   }
 
+  /** What the question's own words find in the shard, or nothing when there is no shard to search. */
+  async function searchedFor(question: string, language: TranslationLanguage) {
+    try {
+      return searchIndex(await shardFor(language), question, limit);
+    } catch {
+      // Grounding is what makes an answer better, not what makes one possible.
+      return [];
+    }
+  }
+
+  const isSamePassage = (one: PassageRef, other: PassageRef) =>
+    one.kind === other.kind &&
+    one.ref.surah === other.ref.surah &&
+    one.ref.ayah === other.ref.ayah;
+
   return {
-    async retrieve(question, language) {
-      let index: RetrievalIndex;
-      try {
-        index = await shardFor(language);
-      } catch {
-        // Grounding is what makes an answer better, not what makes one possible.
-        return [];
-      }
+    async retrieve(question, language, about) {
+      // The Anchor Passage: the commentary on the Ayah the reader is asking about, which is certain
+      // enough to bear on their question that it is included rather than searched for — and so it
+      // leads, and so it is read out of the corpus even when the shard behind the search is not.
+      const anchor: PassageRef | null = about ? { ref: about, kind: "tafsir" } : null;
+      const searched = await searchedFor(question, language);
+
+      const wanted = [
+        ...(anchor ? [anchor] : []),
+        ...searched.filter((found) => !anchor || !isSamePassage(found, anchor)),
+      ].slice(0, limit);
 
       const found = await Promise.all(
-        searchIndex(index, question, limit).map(async ({ ref, kind }) => {
+        wanted.map(async ({ ref, kind }) => {
           try {
             return { ref, kind, text: await readPassage({ ref, kind }, language) };
           } catch {
-            // One passage of four that will not load is three passages of grounding, not none.
+            // One passage of four that will not load is three passages of grounding, not none —
+            // and a language with no tafsir edition at all is where the Anchor Passage lands here.
             return null;
           }
         }),

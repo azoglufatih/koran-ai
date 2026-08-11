@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { activeTabMarks } from "@/components/selection/ayah-marks";
 import { languageLabel } from "./reader-languages";
 import { useTabs } from "./tabs-provider";
 import { aiTabAyah, type Tab } from "./tabs";
@@ -36,6 +35,15 @@ function tabLabel(tab: Tab): string {
  * rather than merely refusing them (docs/adr/0006-columns-of-tabs.md).
  */
 const REASON_ID = "workspace-full";
+
+/**
+ * The Tab the reader is looking at, marked so a switch can scroll it into view. That is the whole
+ * of what it is for: a selection asked about here is grounded in every Tab the reader has open
+ * rather than in the one on screen, so nothing outside this file reads it.
+ */
+const SHOWING_MARK = "data-tab-active";
+
+const showingMarks = (isShowing: boolean) => (isShowing ? { [SHOWING_MARK]: "" } : {});
 
 export function AddColumn() {
   const { columns, sideBySideCap, openTab } = useTabs();
@@ -102,10 +110,9 @@ export function TabWorkspace({ surahNumber }: { surahNumber: number }) {
           key={column.id}
           column={column}
           surahNumber={surahNumber}
-          // Only the Tab the reader is looking at is marked, so a question grounded in a selection
-          // takes its translation from a Tab that is actually on screen. Which Tab that is differs
-          // by width: every Column shows one when they sit side by side, and the strip shows one
-          // in total when they cannot.
+          // Which Tab the reader is looking at differs by width: every Column shows one when they
+          // sit side by side, and the strip shows one in total when they cannot — and only then is
+          // there anywhere to scroll to.
           focusedTabId={sideBySideCap === 0 ? focusedTabId : null}
           // A single Tab fills the strip; several make it worth swiping between.
           panelWidth={tabs.length > 1 ? "w-[88%]" : "w-full"}
@@ -170,7 +177,7 @@ function ReaderColumn({
         {column.tabs.map((tab) => (
           <article
             key={tab.id}
-            {...activeTabMarks(isShowing(tab))}
+            {...showingMarks(isShowing(tab))}
             className={`shrink-0 snap-start xl:w-full ${panelWidth} ${
               tab.id === column.activeTabId ? "" : "xl:hidden"
             }`}
@@ -206,7 +213,7 @@ function useShowingFocusedTab(focusedTabId: string | null) {
     // "nearest" leaves a Tab already on screen alone — where the Columns sit side by side, every
     // switch is one.
     strip.current
-      ?.querySelector("[data-tab-active]")
+      ?.querySelector(`[${SHOWING_MARK}]`)
       ?.scrollIntoView({ block: "nearest", inline: "start" });
   }, [focusedTabId]);
 
